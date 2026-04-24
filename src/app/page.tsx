@@ -35,9 +35,7 @@ export default function HomePage() {
 
           <div className="poster-card">
             <img src="/speakup-keyvisual.jpg" alt="Speak Up DNU 2026 key visual" />
-            <div className="poster-caption">
-              Key visual được tích hợp vào login, dashboard và khu vực chấm điểm theo hướng sang trọng, rõ ràng và dễ thao tác.
-            </div>
+            
           </div>
         </div>
       </section>
