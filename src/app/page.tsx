@@ -13,21 +13,7 @@ export default function HomePage() {
             <Link href="/login" className="btn btn-primary">Đăng nhập hệ thống</Link>
       
 
-          <div className="hero-stat-row">
-            <div className="hero-stat">
-              <div className="hero-stat-value">100</div>
-              <div className="hero-stat-label">Thí sinh</div>
-            </div>
-            <div className="hero-stat">
-              <div className="hero-stat-value">05</div>
-              <div className="hero-stat-label">Giám khảo</div>
-            </div>
-            <div className="hero-stat">
-              <div className="hero-stat-value">30</div>
-              <div className="hero-stat-label">Tối đa vào bán kết</div>
-            </div>
-          </div>
-        </div>
+          
 
        
 
