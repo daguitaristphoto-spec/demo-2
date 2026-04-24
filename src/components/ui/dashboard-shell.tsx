@@ -35,7 +35,7 @@ export function DashboardShell({
           <div className="brand-badge">Speak Up DNU 2026</div>
           <h1>Own The Mic</h1>
           <p>Hệ thống chấm điểm trực tuyến.</p>
-          <div className="brand-script">"Hành trình đánh thức chiến mã"</div>
+          
           
         </div>
 
