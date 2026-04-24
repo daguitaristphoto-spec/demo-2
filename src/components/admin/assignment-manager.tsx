@@ -9,13 +9,28 @@ type Judge = {
   full_name: string;
 };
 
-type Contestant = {
+type AssignmentRow = {
+  contestant_id: string;
+  judge_id: string;
+  can_edit: boolean;
+  created_at?: string;
+};
+
+type ScoreSheetRow = {
+  status: 'draft' | 'submitted';
+  total_score: number;
+};
+
+type ContestantBase = {
   id: string;
   sbd: string;
   full_name: string;
   video_path: string | null;
+  score_sheets: ScoreSheetRow[];
+};
+
+type Contestant = ContestantBase & {
   assignments: { judge_id: string; can_edit: boolean }[];
-  score_sheets: { status: 'draft' | 'submitted'; total_score: number }[];
 };
 
 export function AssignmentManager() {
@@ -28,29 +43,66 @@ export function AssignmentManager() {
   const [query, setQuery] = useState('');
 
   async function reloadContestants() {
-    const { data: contestantsData, error } = await supabase
-      .from('contestants')
-      .select(
-        'id, sbd, full_name, video_path, assignments(judge_id, can_edit), score_sheets(status, total_score)'
-      )
-      .order('sbd');
+    const [
+      { data: contestantsData, error: contestantsError },
+      { data: assignmentsData, error: assignmentsError },
+    ] = await Promise.all([
+      supabase
+        .from('contestants')
+        .select('id, sbd, full_name, video_path, score_sheets(status, total_score)')
+        .order('sbd'),
+      supabase
+        .from('assignments')
+        .select('contestant_id, judge_id, can_edit, created_at')
+        .order('created_at', { ascending: false }),
+    ]);
 
-    if (error) {
-      console.error('reloadContestants error:', error);
+    if (contestantsError) {
+      console.error('reload contestants error:', contestantsError);
       return;
     }
 
-    const nextContestants = (contestantsData ?? []) as Contestant[];
-    setContestants(nextContestants);
+    if (assignmentsError) {
+      console.error('reload assignments error:', assignmentsError);
+      return;
+    }
 
-    // Luôn đồng bộ lại dropdown từ dữ liệu DB mới nhất
+    const contestantRows = (contestantsData ?? []) as ContestantBase[];
+    const assignmentRows = (assignmentsData ?? []) as AssignmentRow[];
+
+    // Lấy đúng 1 assignment mới nhất cho mỗi thí sinh
+    const latestAssignmentMap = new Map<string, AssignmentRow>();
+    for (const row of assignmentRows) {
+      if (!latestAssignmentMap.has(row.contestant_id)) {
+        latestAssignmentMap.set(row.contestant_id, row);
+      }
+    }
+
+    const mergedContestants: Contestant[] = contestantRows.map((contestant) => {
+      const currentAssignment = latestAssignmentMap.get(contestant.id);
+
+      return {
+        ...contestant,
+        assignments: currentAssignment
+          ? [
+              {
+                judge_id: currentAssignment.judge_id,
+                can_edit: currentAssignment.can_edit,
+              },
+            ]
+          : [],
+      };
+    });
+
+    setContestants(mergedContestants);
+
     const nextSelected: Record<string, string> = {};
-    nextContestants.forEach((contestant) => {
+    mergedContestants.forEach((contestant) => {
       nextSelected[contestant.id] = contestant.assignments?.[0]?.judge_id ?? '';
     });
     setSelectedJudges(nextSelected);
 
-    console.log('reload contestants:', nextContestants);
+    console.log('mergedContestants', mergedContestants);
   }
 
   useEffect(() => {
@@ -75,7 +127,7 @@ export function AssignmentManager() {
   async function updateAssignment(contestantId: string, judgeId: string) {
     const oldJudgeId = selectedJudges[contestantId] ?? '';
 
-    // cập nhật giao diện ngay
+    // cập nhật UI ngay
     setSelectedJudges((prev) => ({
       ...prev,
       [contestantId]: judgeId,
@@ -94,7 +146,7 @@ export function AssignmentManager() {
         throw new Error('Không cập nhật được phân công.');
       }
 
-      // cập nhật local contestants ngay để badge/trạng thái không bị lệch
+      // cập nhật local ngay để bộ đếm không nhảy ngược
       setContestants((prev) =>
         prev.map((contestant) => {
           if (contestant.id !== contestantId) return contestant;
@@ -110,12 +162,11 @@ export function AssignmentManager() {
         })
       );
 
-      // nạp lại từ DB để đồng bộ hoàn toàn
+      // reload lại từ DB, nhưng lần này lấy assignments từ bảng riêng
       await reloadContestants();
     } catch (error) {
       console.error('updateAssignment error:', error);
 
-      // rollback nếu lỗi
       setSelectedJudges((prev) => ({
         ...prev,
         [contestantId]: oldJudgeId,
