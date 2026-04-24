@@ -34,11 +34,9 @@ export function DashboardShell({
         <div className="brand-card">
           <div className="brand-badge">Speak Up DNU 2026</div>
           <h1>Own The Mic</h1>
-          <p>Hệ thống chấm điểm vòng sơ loại cho ban tổ chức và ban giám khảo.</p>
-          <div className="brand-script">Hành trình đánh thức chiến mã</div>
-          <div className="brand-meta">
-            Ngôn ngữ giao diện lấy cảm hứng từ sân khấu, spotlight và hình tượng chiến mã ánh sáng.
-          </div>
+          <p>Hệ thống chấm điểm trực tuyến.</p>
+          <div className="brand-script">"Hành trình đánh thức chiến mã"</div>
+          
         </div>
 
         <div className="sidebar-section">
