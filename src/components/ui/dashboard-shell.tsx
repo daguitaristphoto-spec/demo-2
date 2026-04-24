@@ -1,0 +1,84 @@
+import Link from 'next/link';
+import type { ReactNode } from 'react';
+
+type NavItem = {
+  href: string;
+  label: string;
+  description?: string;
+};
+
+type DashboardShellProps = {
+  roleLabel: string;
+  userName: string;
+  title: string;
+  subtitle?: string;
+  navItems: NavItem[];
+  activeHref: string;
+  actions?: ReactNode;
+  children: ReactNode;
+};
+
+export function DashboardShell({
+  roleLabel,
+  userName,
+  title,
+  subtitle,
+  navItems,
+  activeHref,
+  actions,
+  children,
+}: DashboardShellProps) {
+  return (
+    <div className="shell-layout">
+      <aside className="shell-sidebar">
+        <div className="brand-card">
+          <div className="brand-badge">Speak Up DNU 2026</div>
+          <h1>Own The Mic</h1>
+          <p>Hệ thống chấm điểm vòng sơ loại cho ban tổ chức và ban giám khảo.</p>
+          <div className="brand-script">Hành trình đánh thức chiến mã</div>
+          <div className="brand-meta">Ngôn ngữ giao diện lấy cảm hứng từ sân khấu, spotlight và hình tượng chiến mã ánh sáng.</div>
+        </div>
+
+        <div className="sidebar-section">
+          <div className="sidebar-label">Vai trò hiện tại</div>
+          <div className="sidebar-user-card">
+            <div className="sidebar-role">{roleLabel}</div>
+            <div className="sidebar-user-name">{userName}</div>
+          </div>
+        </div>
+
+        <nav className="sidebar-nav">
+          <div className="sidebar-label">Điều hướng</div>
+          {navItems.map((item) => {
+            const active = activeHref === item.href;
+            return (
+              <Link key={item.href} href={item.href} className={`nav-link ${active ? 'nav-link-active' : ''}`}>
+                <span className="nav-link-title">{item.label}</span>
+                {item.description ? <span className="nav-link-description">{item.description}</span> : null}
+              </Link>
+            );
+          })}
+        </nav>
+      </aside>
+
+      <main className="shell-main">
+        <div className="stage-banner">
+          <div>
+            <div className="stage-banner-title">Key visual đã được áp vào hệ thống</div>
+            <div className="stage-banner-note">Dark blue · Gold spotlight · Glass card · Tinh thần sân khấu Speak Up DNU 2026</div>
+          </div>
+        </div>
+
+        <header className="page-header-card">
+          <div>
+            <div className="eyebrow">{roleLabel}</div>
+            <h2 className="page-title">{title}</h2>
+            {subtitle ? <p className="page-subtitle">{subtitle}</p> : null}
+          </div>
+          {actions ? <div className="header-actions">{actions}</div> : null}
+        </header>
+        {children}
+      </main>
+    </div>
+  );
+}

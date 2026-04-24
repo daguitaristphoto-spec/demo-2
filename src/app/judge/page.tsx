@@ -1,0 +1,98 @@
+import Link from 'next/link';
+import { requireRole } from '@/lib/auth-guard';
+import { DashboardShell } from '@/components/ui/dashboard-shell';
+import { StatCard } from '@/components/ui/stat-card';
+import { StatusBadge } from '@/components/ui/status-badge';
+
+const JUDGE_NAV = [
+  { href: '/judge', label: 'Danh sách được giao', description: 'Xem toàn bộ thí sinh bạn đang phụ trách.' },
+];
+
+export default async function JudgeDashboardPage() {
+  const { supabase, user, profile } = await requireRole('judge');
+
+  const [{ data: assignments }, { data: sheets }] = await Promise.all([
+    supabase
+      .from('assignments')
+      .select('contestant_id, can_edit, contestant:contestants(id, sbd, full_name, video_path)')
+      .eq('judge_id', user.id)
+      .order('created_at'),
+    supabase
+      .from('score_sheets')
+      .select('contestant_id, status, total_score')
+      .eq('judge_id', user.id),
+  ]);
+
+  const sheetMap = new Map((sheets ?? []).map((sheet) => [sheet.contestant_id, sheet]));
+  const submittedCount = (sheets ?? []).filter((sheet) => sheet.status === 'submitted').length;
+
+  return (
+    <DashboardShell
+      roleLabel="Giám khảo"
+      userName={profile.full_name}
+      title={`Xin chào, ${profile.full_name}`}
+      subtitle="Danh sách thí sinh được phân công cho bạn ở vòng sơ loại. Mở từng bài để xem video và chấm ngay trên một màn hình."
+      navItems={JUDGE_NAV}
+      activeHref="/judge"
+    >
+      <section className="stats-grid">
+        <StatCard label="Được phân công" value={assignments?.length ?? 0} hint="Tổng số thí sinh bạn cần chấm." />
+        <StatCard label="Đã nộp phiếu" value={submittedCount} hint="Số phiếu đã nộp chính thức." />
+        <StatCard label="Còn lại" value={(assignments?.length ?? 0) - submittedCount} hint="Số bài vẫn cần hoàn thành." />
+      </section>
+
+      <section className="card-surface">
+        <div className="card-header">
+          <h3 className="card-title">Danh sách thí sinh được giao</h3>
+          <p className="card-subtitle">Mở từng bài để xem video, nhập điểm và nộp phiếu chính thức.</p>
+        </div>
+        <div className="table-wrap">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>SBD</th>
+                <th>Thí sinh</th>
+                <th>Video</th>
+                <th>Trạng thái</th>
+                <th>Tổng điểm</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {(assignments ?? []).map((row: any) => {
+                const contestant = Array.isArray(row.contestant) ? row.contestant[0] : row.contestant;
+                const sheet = sheetMap.get(row.contestant_id);
+                const status = sheet?.status === 'submitted'
+                  ? row.can_edit
+                    ? { label: 'Đã nộp - đang mở lại', tone: 'warning' as const }
+                    : { label: 'Đã nộp', tone: 'success' as const }
+                  : { label: 'Chưa nộp', tone: 'neutral' as const };
+
+                return (
+                  <tr key={contestant?.id}>
+                    <td className="strong-cell">{contestant?.sbd}</td>
+                    <td>{contestant?.full_name}</td>
+                    <td>
+                      <StatusBadge tone={contestant?.video_path ? 'info' : 'danger'}>
+                        {contestant?.video_path ? 'Có video' : 'Chưa có video'}
+                      </StatusBadge>
+                    </td>
+                    <td>
+                      <StatusBadge tone={status.tone}>{status.label}</StatusBadge>
+                    </td>
+                    <td>{sheet?.total_score ?? '-'}</td>
+                    <td className="table-action-cell">
+                      <Link href={`/judge/contestants/${contestant?.id}`} className="btn btn-primary btn-sm">
+                        Vào chấm
+                      </Link>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </DashboardShell>
+  );
+}

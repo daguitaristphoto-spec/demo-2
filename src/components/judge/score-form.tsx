@@ -1,0 +1,171 @@
+'use client';
+
+import { useMemo, useState } from 'react';
+import { ROUND1_CRITERIA } from '@/lib/round1-criteria';
+import { calculateRound1Score } from '@/lib/scoring';
+import type { ScoreItemInput } from '@/lib/types';
+import { StatusBadge } from '@/components/ui/status-badge';
+
+type ExistingItem = {
+  criterion_key: string;
+  criterion_group: string;
+  score: number;
+};
+
+type Props = {
+  contestantId: string;
+  canEdit: boolean;
+  strengths?: string | null;
+  weaknesses?: string | null;
+  items?: ExistingItem[];
+};
+
+export function ScoreForm({ contestantId, canEdit, strengths: initialStrengths, weaknesses: initialWeaknesses, items = [] }: Props) {
+  const [strengths, setStrengths] = useState(initialStrengths ?? '');
+  const [weaknesses, setWeaknesses] = useState(initialWeaknesses ?? '');
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const [values, setValues] = useState<Record<string, number>>(() => {
+    const seed: Record<string, number> = {};
+    for (const item of items) {
+      seed[item.criterion_key] = Number(item.score);
+    }
+    return seed;
+  });
+
+  const scoreItems: ScoreItemInput[] = useMemo(
+    () =>
+      ROUND1_CRITERIA.flatMap((group) =>
+        group.items.map((item) => ({
+          criterionKey: item.key,
+          criterionGroup: group.key,
+          score: Number(values[item.key] ?? 0),
+        }))
+      ),
+    [values]
+  );
+
+  const scoreResult = calculateRound1Score(scoreItems);
+
+  async function persist(action: 'save' | 'submit') {
+    setLoading(true);
+    setMessage(null);
+
+    const res = await fetch('/api/judge/scores', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contestantId,
+        action,
+        strengths,
+        weaknesses,
+        items: scoreItems,
+      }),
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      setMessage(data.error ?? 'Không lưu được phiếu chấm.');
+      setLoading(false);
+      return;
+    }
+
+    setMessage(action === 'submit' ? 'Đã nộp phiếu chấm.' : 'Đã lưu nháp.');
+    setLoading(false);
+    if (action === 'submit') {
+      window.location.reload();
+    }
+  }
+
+  return (
+    <div className="card-surface score-card">
+      <div className="score-card-top">
+        <div>
+          <div className="eyebrow">Speak Up DNU 2026</div>
+          <h2 className="card-title">Phiếu chấm vòng 1</h2>
+          <p className="card-subtitle">Điểm được quy đổi tự động theo trọng số 100 điểm, giữ đúng cấu trúc bảng chấm vòng sơ loại.</p>
+        </div>
+        <div className="score-summary-box">
+          <div className="score-summary-label">Tổng điểm</div>
+          <div className="score-summary-value">{scoreResult.final100}</div>
+          <div className="score-summary-footer">
+            <StatusBadge tone={scoreResult.final100 >= 85 ? 'success' : scoreResult.final100 >= 70 ? 'warning' : 'danger'}>
+              {scoreResult.classification}
+            </StatusBadge>
+          </div>
+        </div>
+      </div>
+
+      <div className="criteria-stack">
+        {ROUND1_CRITERIA.map((group) => (
+          <section key={group.key} className="criteria-card">
+            <div className="criteria-header">
+              <div>
+                <h3>{group.title}</h3>
+                <p>Trọng số {group.weight * 100}%</p>
+              </div>
+            </div>
+            <div className="criteria-items">
+              {group.items.map((item) => (
+                <div key={item.key} className="criterion-row">
+                  <label className="criterion-label">{item.label}</label>
+                  <div className="criterion-input-wrap">
+                    <input
+                      type="number"
+                      min={0}
+                      max={item.max}
+                      step={0.5}
+                      disabled={!canEdit || loading}
+                      value={values[item.key] ?? ''}
+                      onChange={(e) => setValues((prev) => ({ ...prev, [item.key]: Number(e.target.value) }))}
+                      className="input score-input"
+                    />
+                    <span className="criterion-max">/ {item.max}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        ))}
+      </div>
+
+      <section className="notes-grid">
+        <div className="field-group">
+          <label className="field-label">Ưu điểm</label>
+          <textarea
+            rows={5}
+            disabled={!canEdit || loading}
+            value={strengths}
+            onChange={(e) => setStrengths(e.target.value)}
+            className="textarea"
+            placeholder="Ghi lại những điểm nổi bật của thí sinh..."
+          />
+        </div>
+        <div className="field-group">
+          <label className="field-label">Hạn chế</label>
+          <textarea
+            rows={5}
+            disabled={!canEdit || loading}
+            value={weaknesses}
+            onChange={(e) => setWeaknesses(e.target.value)}
+            className="textarea"
+            placeholder="Ghi lại những điểm cần cải thiện..."
+          />
+        </div>
+      </section>
+
+      {message ? <div className="alert alert-info">{message}</div> : null}
+
+      <div className="score-actions">
+        <button onClick={() => persist('save')} disabled={!canEdit || loading} className="btn btn-secondary">
+          Lưu nháp
+        </button>
+        <button onClick={() => persist('submit')} disabled={!canEdit || loading} className="btn btn-primary">
+          Nộp chính thức
+        </button>
+        {!canEdit ? <span className="lock-note">Phiếu đã khóa. Chỉ admin mới có thể mở lại.</span> : null}
+      </div>
+    </div>
+  );
+}
