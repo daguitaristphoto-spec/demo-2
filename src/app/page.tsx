@@ -30,12 +30,7 @@ export default function HomePage() {
         </div>
 
         <div className="hero-highlight card-gradient">
-          <div className="hero-highlight-top">Quy trình gợi ý</div>
-          <div className="timeline-list">
-            <div className="timeline-item"><strong>1.</strong> Import danh sách thí sinh từ Excel vào hệ thống.</div>
-            <div className="timeline-item"><strong>2.</strong> Gán đúng 1 giám khảo cho từng thí sinh ở vòng sơ loại.</div>
-            <div className="timeline-item"><strong>3.</strong> Upload video dự thi để giám khảo xem trực tiếp trên web.</div>
-            <div className="timeline-item"><strong>4.</strong> Giám khảo nộp phiếu, admin theo dõi tiến độ và mở lại nếu cần.</div>
+          
           </div>
 
           <div className="poster-card">
