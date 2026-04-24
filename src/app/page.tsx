@@ -8,14 +8,10 @@ export default function HomePage() {
           <div className="eyebrow">Speak Up DNU 2026</div>
           <h1 className="hero-title">Hệ thống chấm điểm vòng sơ loại mang đúng tinh thần sân khấu của cuộc thi</h1>
           <div className="hero-kicker">Own The Mic — Hành trình đánh thức chiến mã</div>
-          <p className="hero-description">
-            Admin quản lý thí sinh, import Excel, upload video và phân công giám khảo. Giám khảo xem video, chấm điểm và nộp phiếu
-            ngay trên cùng một giao diện theo nhận diện visual chính thức của Speak Up DNU 2026.
-          </p>
+          
           <div className="hero-actions">
             <Link href="/login" className="btn btn-primary">Đăng nhập hệ thống</Link>
-            <Link href="/judge" className="btn btn-secondary">Vào trang giám khảo</Link>
-          </div>
+      
 
           <div className="hero-stat-row">
             <div className="hero-stat">
