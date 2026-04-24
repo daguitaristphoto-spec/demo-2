@@ -13,7 +13,6 @@ type AssignmentRow = {
   contestant_id: string;
   judge_id: string;
   can_edit: boolean;
-  created_at?: string;
 };
 
 type ScoreSheetRow = {
@@ -38,7 +37,9 @@ export function AssignmentManager() {
 
   const [judges, setJudges] = useState<Judge[]>([]);
   const [contestants, setContestants] = useState<Contestant[]>([]);
-  const [selectedJudges, setSelectedJudges] = useState<Record<string, string>>({});
+  const [selectedJudges, setSelectedJudges] = useState<Record<string, string>>(
+    {}
+  );
   const [savingId, setSavingId] = useState<string | null>(null);
   const [query, setQuery] = useState('');
 
@@ -53,41 +54,38 @@ export function AssignmentManager() {
         .order('sbd'),
       supabase
         .from('assignments')
-        .select('contestant_id, judge_id, can_edit, created_at')
-        .order('created_at', { ascending: false }),
+        .select('contestant_id, judge_id, can_edit'),
     ]);
 
     if (contestantsError) {
-      console.error('reload contestants error:', contestantsError);
+      console.error('contestantsError:', contestantsError);
       return;
     }
 
     if (assignmentsError) {
-      console.error('reload assignments error:', assignmentsError);
+      console.error('assignmentsError:', assignmentsError);
       return;
     }
 
     const contestantRows = (contestantsData ?? []) as ContestantBase[];
     const assignmentRows = (assignmentsData ?? []) as AssignmentRow[];
 
-    // Lấy đúng 1 assignment mới nhất cho mỗi thí sinh
-    const latestAssignmentMap = new Map<string, AssignmentRow>();
+    const assignmentMap = new Map<string, AssignmentRow>();
     for (const row of assignmentRows) {
-      if (!latestAssignmentMap.has(row.contestant_id)) {
-        latestAssignmentMap.set(row.contestant_id, row);
-      }
+      // nếu có nhiều dòng cho cùng 1 thí sinh thì lấy dòng cuối cùng đọc được
+      assignmentMap.set(row.contestant_id, row);
     }
 
     const mergedContestants: Contestant[] = contestantRows.map((contestant) => {
-      const currentAssignment = latestAssignmentMap.get(contestant.id);
+      const assignment = assignmentMap.get(contestant.id);
 
       return {
         ...contestant,
-        assignments: currentAssignment
+        assignments: assignment
           ? [
               {
-                judge_id: currentAssignment.judge_id,
-                can_edit: currentAssignment.can_edit,
+                judge_id: assignment.judge_id,
+                can_edit: assignment.can_edit,
               },
             ]
           : [],
@@ -97,12 +95,10 @@ export function AssignmentManager() {
     setContestants(mergedContestants);
 
     const nextSelected: Record<string, string> = {};
-    mergedContestants.forEach((contestant) => {
+    for (const contestant of mergedContestants) {
       nextSelected[contestant.id] = contestant.assignments?.[0]?.judge_id ?? '';
-    });
+    }
     setSelectedJudges(nextSelected);
-
-    console.log('mergedContestants', mergedContestants);
   }
 
   useEffect(() => {
@@ -114,7 +110,7 @@ export function AssignmentManager() {
         .order('full_name');
 
       if (judgesError) {
-        console.error('load judges error:', judgesError);
+        console.error('judgesError:', judgesError);
       }
 
       setJudges((judgesData ?? []) as Judge[]);
@@ -127,11 +123,26 @@ export function AssignmentManager() {
   async function updateAssignment(contestantId: string, judgeId: string) {
     const oldJudgeId = selectedJudges[contestantId] ?? '';
 
-    // cập nhật UI ngay
+    // cập nhật giao diện ngay
     setSelectedJudges((prev) => ({
       ...prev,
       [contestantId]: judgeId,
     }));
+
+    setContestants((prev) =>
+      prev.map((contestant) => {
+        if (contestant.id !== contestantId) return contestant;
+
+        const currentCanEdit = contestant.assignments?.[0]?.can_edit ?? false;
+
+        return {
+          ...contestant,
+          assignments: judgeId
+            ? [{ judge_id: judgeId, can_edit: currentCanEdit }]
+            : [],
+        };
+      })
+    );
 
     setSavingId(contestantId);
 
@@ -146,7 +157,17 @@ export function AssignmentManager() {
         throw new Error('Không cập nhật được phân công.');
       }
 
-      // cập nhật local ngay để bộ đếm không nhảy ngược
+      // không reload ngay để tránh bị ghi đè dropdown
+      // nếu muốn, anh/chị có thể bấm F5 để kiểm tra dữ liệu DB sau
+    } catch (error) {
+      console.error('updateAssignment error:', error);
+
+      // rollback nếu lỗi
+      setSelectedJudges((prev) => ({
+        ...prev,
+        [contestantId]: oldJudgeId,
+      }));
+
       setContestants((prev) =>
         prev.map((contestant) => {
           if (contestant.id !== contestantId) return contestant;
@@ -155,22 +176,12 @@ export function AssignmentManager() {
 
           return {
             ...contestant,
-            assignments: judgeId
-              ? [{ judge_id: judgeId, can_edit: currentCanEdit }]
+            assignments: oldJudgeId
+              ? [{ judge_id: oldJudgeId, can_edit: currentCanEdit }]
               : [],
           };
         })
       );
-
-      // reload lại từ DB, nhưng lần này lấy assignments từ bảng riêng
-      await reloadContestants();
-    } catch (error) {
-      console.error('updateAssignment error:', error);
-
-      setSelectedJudges((prev) => ({
-        ...prev,
-        [contestantId]: oldJudgeId,
-      }));
 
       alert('Không cập nhật được phân công.');
     } finally {
