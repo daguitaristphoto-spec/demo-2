@@ -36,7 +36,9 @@ export function DashboardShell({
           <h1>Own The Mic</h1>
           <p>Hệ thống chấm điểm vòng sơ loại cho ban tổ chức và ban giám khảo.</p>
           <div className="brand-script">Hành trình đánh thức chiến mã</div>
-          <div className="brand-meta">Ngôn ngữ giao diện lấy cảm hứng từ sân khấu, spotlight và hình tượng chiến mã ánh sáng.</div>
+          <div className="brand-meta">
+            Ngôn ngữ giao diện lấy cảm hứng từ sân khấu, spotlight và hình tượng chiến mã ánh sáng.
+          </div>
         </div>
 
         <div className="sidebar-section">
@@ -52,9 +54,15 @@ export function DashboardShell({
           {navItems.map((item) => {
             const active = activeHref === item.href;
             return (
-              <Link key={item.href} href={item.href} className={`nav-link ${active ? 'nav-link-active' : ''}`}>
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`nav-link ${active ? 'nav-link-active' : ''}`}
+              >
                 <span className="nav-link-title">{item.label}</span>
-                {item.description ? <span className="nav-link-description">{item.description}</span> : null}
+                {item.description ? (
+                  <span className="nav-link-description">{item.description}</span>
+                ) : null}
               </Link>
             );
           })}
@@ -62,13 +70,6 @@ export function DashboardShell({
       </aside>
 
       <main className="shell-main">
-        <div className="stage-banner">
-          <div>
-            <div className="stage-banner-title">Key visual đã được áp vào hệ thống</div>
-            <div className="stage-banner-note">Dark blue · Gold spotlight · Glass card · Tinh thần sân khấu Speak Up DNU 2026</div>
-          </div>
-        </div>
-
         <header className="page-header-card">
           <div>
             <div className="eyebrow">{roleLabel}</div>
@@ -77,6 +78,7 @@ export function DashboardShell({
           </div>
           {actions ? <div className="header-actions">{actions}</div> : null}
         </header>
+
         {children}
       </main>
     </div>
