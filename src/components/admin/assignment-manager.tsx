@@ -25,34 +25,27 @@ export function AssignmentManager() {
   const [query, setQuery] = useState('');
 
   async function reloadContestants() {
-    const { data: contestantsData, error } = await supabase
-      .from('contestants')
-      .select(
-        'id, sbd, full_name, video_path, assignments(judge_id, can_edit), score_sheets(status, total_score)'
-      )
-      .order('sbd');
+  const { data: contestantsData, error } = await supabase
+    .from('contestants')
+    .select(
+      'id, sbd, full_name, video_path, assignments(judge_id, can_edit), score_sheets(status, total_score)'
+    )
+    .order('sbd');
 
-    if (error) {
-      console.error('reloadContestants error:', error);
-      return;
-    }
+  if (error) {
+    console.error('reloadContestants error:', error);
+    return;
+  }
 
-    const nextContestants = (contestantsData ?? []) as Contestant[];
-    setContestants(nextContestants);
+  const nextContestants = (contestantsData ?? []) as Contestant[];
+  setContestants(nextContestants);
 
-    // Chỉ đồng bộ từ DB cho những dòng chưa có state local
-    // để tránh dropdown bị nhảy về placeholder sau khi vừa chọn xong.
-    setSelectedJudges((prev) => {
-      const next = { ...prev };
-
-      for (const contestant of nextContestants) {
-        if (!(contestant.id in next)) {
-          next[contestant.id] = contestant.assignments?.[0]?.judge_id ?? '';
-        }
-      }
-
-      return next;
-    });
+  // Luôn đồng bộ lại selectedJudges từ dữ liệu mới nhất
+  const nextSelected: Record<string, string> = {};
+  nextContestants.forEach((contestant) => {
+    nextSelected[contestant.id] = contestant.assignments?.[0]?.judge_id ?? '';
+  });
+  setSelectedJudges(nextSelected);
   }
 
   useEffect(() => {
