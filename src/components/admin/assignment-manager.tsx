@@ -4,7 +4,10 @@ import { useEffect, useMemo, useState } from 'react';
 import { createClient } from '@/lib/supabase/browser';
 import { StatusBadge } from '@/components/ui/status-badge';
 
-type Judge = { id: string; full_name: string };
+type Judge = {
+  id: string;
+  full_name: string;
+};
 
 type Contestant = {
   id: string;
@@ -25,27 +28,29 @@ export function AssignmentManager() {
   const [query, setQuery] = useState('');
 
   async function reloadContestants() {
-  const { data: contestantsData, error } = await supabase
-    .from('contestants')
-    .select(
-      'id, sbd, full_name, video_path, assignments(judge_id, can_edit), score_sheets(status, total_score)'
-    )
-    .order('sbd');
+    const { data: contestantsData, error } = await supabase
+      .from('contestants')
+      .select(
+        'id, sbd, full_name, video_path, assignments(judge_id, can_edit), score_sheets(status, total_score)'
+      )
+      .order('sbd');
 
-  if (error) {
-    console.error('reloadContestants error:', error);
-    return;
-  }
+    if (error) {
+      console.error('reloadContestants error:', error);
+      return;
+    }
 
-  const nextContestants = (contestantsData ?? []) as Contestant[];
-  setContestants(nextContestants);
+    const nextContestants = (contestantsData ?? []) as Contestant[];
+    setContestants(nextContestants);
 
-  // Luôn đồng bộ lại selectedJudges từ dữ liệu mới nhất
-  const nextSelected: Record<string, string> = {};
-  nextContestants.forEach((contestant) => {
-    nextSelected[contestant.id] = contestant.assignments?.[0]?.judge_id ?? '';
-  });
-  setSelectedJudges(nextSelected);
+    // Luôn đồng bộ lại dropdown từ dữ liệu DB mới nhất
+    const nextSelected: Record<string, string> = {};
+    nextContestants.forEach((contestant) => {
+      nextSelected[contestant.id] = contestant.assignments?.[0]?.judge_id ?? '';
+    });
+    setSelectedJudges(nextSelected);
+
+    console.log('reload contestants:', nextContestants);
   }
 
   useEffect(() => {
@@ -70,7 +75,7 @@ export function AssignmentManager() {
   async function updateAssignment(contestantId: string, judgeId: string) {
     const oldJudgeId = selectedJudges[contestantId] ?? '';
 
-    // Cập nhật giao diện ngay
+    // cập nhật giao diện ngay
     setSelectedJudges((prev) => ({
       ...prev,
       [contestantId]: judgeId,
@@ -89,7 +94,7 @@ export function AssignmentManager() {
         throw new Error('Không cập nhật được phân công.');
       }
 
-      // Cập nhật nhẹ contestants local để các phần phụ thuộc dữ liệu này không lệch quá xa
+      // cập nhật local contestants ngay để badge/trạng thái không bị lệch
       setContestants((prev) =>
         prev.map((contestant) => {
           if (contestant.id !== contestantId) return contestant;
@@ -104,10 +109,13 @@ export function AssignmentManager() {
           };
         })
       );
+
+      // nạp lại từ DB để đồng bộ hoàn toàn
+      await reloadContestants();
     } catch (error) {
       console.error('updateAssignment error:', error);
 
-      // Nếu lỗi thì trả lại giá trị cũ
+      // rollback nếu lỗi
       setSelectedJudges((prev) => ({
         ...prev,
         [contestantId]: oldJudgeId,
@@ -148,7 +156,8 @@ export function AssignmentManager() {
 
     return contestants.filter((contestant) => {
       const currentJudgeId = selectedJudges[contestant.id] ?? '';
-      const judgeName = judges.find((judge) => judge.id === currentJudgeId)?.full_name ?? '';
+      const judgeName =
+        judges.find((judge) => judge.id === currentJudgeId)?.full_name ?? '';
 
       return [contestant.sbd, contestant.full_name, judgeName].some((value) =>
         value.toLowerCase().includes(keyword)
@@ -160,7 +169,9 @@ export function AssignmentManager() {
     (contestant) => (selectedJudges[contestant.id] ?? '').trim() !== ''
   ).length;
 
-  const uploadedVideoCount = contestants.filter((contestant) => contestant.video_path).length;
+  const uploadedVideoCount = contestants.filter(
+    (contestant) => contestant.video_path
+  ).length;
 
   const submittedCount = contestants.filter(
     (contestant) => contestant.score_sheets?.[0]?.status === 'submitted'
@@ -174,19 +185,25 @@ export function AssignmentManager() {
           <div className="stat-value">
             {assignedCount}/{contestants.length}
           </div>
-          <div className="stat-hint">Số thí sinh đã có giám khảo phụ trách.</div>
+          <div className="stat-hint">
+            Số thí sinh đã có giám khảo phụ trách.
+          </div>
         </div>
 
         <div className="stat-card compact">
           <div className="stat-label">Đã có video</div>
           <div className="stat-value">{uploadedVideoCount}</div>
-          <div className="stat-hint">Kiểm tra nhanh tiến độ upload video trước khi chấm.</div>
+          <div className="stat-hint">
+            Kiểm tra nhanh tiến độ upload video trước khi chấm.
+          </div>
         </div>
 
         <div className="stat-card compact">
           <div className="stat-label">Phiếu đã nộp</div>
           <div className="stat-value">{submittedCount}</div>
-          <div className="stat-hint">Admin có thể mở lại các phiếu đã khóa nếu cần.</div>
+          <div className="stat-hint">
+            Admin có thể mở lại các phiếu đã khóa nếu cần.
+          </div>
         </div>
       </section>
 
@@ -241,7 +258,9 @@ export function AssignmentManager() {
                     <td>
                       <select
                         value={currentJudge}
-                        onChange={(e) => updateAssignment(contestant.id, e.target.value)}
+                        onChange={(e) =>
+                          updateAssignment(contestant.id, e.target.value)
+                        }
                         disabled={savingId === contestant.id}
                         className="select"
                       >
