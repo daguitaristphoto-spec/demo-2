@@ -40,35 +40,6 @@ export default async function AdminDashboardPage() {
         <StatCard label="Số giám khảo" value={judgeCount ?? 0} hint="Số tài khoản judge hiện đang hoạt động." />
         <StatCard label="Phiếu đã nộp" value={submittedCount ?? 0} hint="Tổng số bài đã được giám khảo nộp chính thức." />
       </section>
-
-      <section className="content-grid-two">
-        <div className="card-surface card-gradient">
-          <div className="card-header">
-            <h3 className="card-title">Luồng làm việc khuyến nghị</h3>
-            <p className="card-subtitle">Một quy trình ngắn gọn để vận hành vòng sơ loại mượt hơn.</p>
-          </div>
-          <div className="timeline-list">
-            <div className="timeline-item"><strong>1.</strong> Tạo tài khoản judge trong Supabase Auth và gán role trong bảng profiles.</div>
-            <div className="timeline-item"><strong>2.</strong> Import 100 thí sinh từ Excel.</div>
-            <div className="timeline-item"><strong>3.</strong> Phân công 20 thí sinh cho mỗi giám khảo.</div>
-            <div className="timeline-item"><strong>4.</strong> Upload video cho từng thí sinh và kiểm tra phát lại.</div>
-            <div className="timeline-item"><strong>5.</strong> Theo dõi số phiếu đã nộp và mở lại nếu cần chấm sửa.</div>
-          </div>
-        </div>
-
-        <div className="card-surface">
-          <div className="card-header">
-            <h3 className="card-title">Mục tiêu của phiên bản hiện tại</h3>
-            <p className="card-subtitle">Tập trung vào vòng 1 trước khi mở rộng thêm các vòng còn lại.</p>
-          </div>
-          <div className="bullet-stack">
-            <div className="bullet-item">Giao diện admin rõ ràng hơn để theo dõi tiến độ.</div>
-            <div className="bullet-item">Màn hình giám khảo tập trung vào xem video và chấm điểm.</div>
-            <div className="bullet-item">Các hành động chính được gom thành các nút nổi bật ở đầu trang.</div>
-            <div className="bullet-item">Giữ logic phân quyền cũ, chỉ nâng cấp trải nghiệm sử dụng.</div>
-          </div>
-        </div>
-      </section>
     </DashboardShell>
   );
 }
