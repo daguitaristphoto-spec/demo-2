@@ -159,6 +159,8 @@ export function AssignmentManager() {
                         onChange={(e) => updateAssignment(contestant.id, e.target.value)}
                         disabled={savingId === contestant.id}
                         className="select"
+                        value={assignment?.judge_id ?? ""}
+                        onChange={(e) => handleAssign(contestant.id, e.target.value)}
                       >
                         <option value="">-- Chọn giám khảo --</option>
                         {judges.map((judge) => (
