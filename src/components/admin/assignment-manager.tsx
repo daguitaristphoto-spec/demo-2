@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/browser';
 import { StatusBadge } from '@/components/ui/status-badge';
 
 type Judge = { id: string; full_name: string };
+
 type Contestant = {
   id: string;
   sbd: string;
@@ -16,23 +17,56 @@ type Contestant = {
 
 export function AssignmentManager() {
   const supabase = createClient();
+
   const [judges, setJudges] = useState<Judge[]>([]);
   const [contestants, setContestants] = useState<Contestant[]>([]);
+  const [selectedJudges, setSelectedJudges] = useState<Record<string, string>>({});
   const [savingId, setSavingId] = useState<string | null>(null);
   const [query, setQuery] = useState('');
 
   async function reloadContestants() {
-    const { data: contestantsData } = await supabase
+    const { data: contestantsData, error } = await supabase
       .from('contestants')
-      .select('id, sbd, full_name, video_path, assignments(judge_id, can_edit), score_sheets(status, total_score)')
+      .select(
+        'id, sbd, full_name, video_path, assignments(judge_id, can_edit), score_sheets(status, total_score)'
+      )
       .order('sbd');
 
-    setContestants((contestantsData ?? []) as Contestant[]);
+    if (error) {
+      console.error('reloadContestants error:', error);
+      return;
+    }
+
+    const nextContestants = (contestantsData ?? []) as Contestant[];
+    setContestants(nextContestants);
+
+    // Chỉ đồng bộ từ DB cho những dòng chưa có state local
+    // để tránh dropdown bị nhảy về placeholder sau khi vừa chọn xong.
+    setSelectedJudges((prev) => {
+      const next = { ...prev };
+
+      for (const contestant of nextContestants) {
+        if (!(contestant.id in next)) {
+          next[contestant.id] = contestant.assignments?.[0]?.judge_id ?? '';
+        }
+      }
+
+      return next;
+    });
   }
 
   useEffect(() => {
     async function load() {
-      const { data: judgesData } = await supabase.from('profiles').select('id, full_name').eq('role', 'judge').order('full_name');
+      const { data: judgesData, error: judgesError } = await supabase
+        .from('profiles')
+        .select('id, full_name')
+        .eq('role', 'judge')
+        .order('full_name');
+
+      if (judgesError) {
+        console.error('load judges error:', judgesError);
+      }
+
       setJudges((judgesData ?? []) as Judge[]);
       await reloadContestants();
     }
@@ -41,40 +75,78 @@ export function AssignmentManager() {
   }, []);
 
   async function updateAssignment(contestantId: string, judgeId: string) {
+    const oldJudgeId = selectedJudges[contestantId] ?? '';
+
+    // Cập nhật giao diện ngay
+    setSelectedJudges((prev) => ({
+      ...prev,
+      [contestantId]: judgeId,
+    }));
+
     setSavingId(contestantId);
 
-    const res = await fetch('/api/admin/assignments', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ contestantId, judgeId }),
-    });
+    try {
+      const res = await fetch('/api/admin/assignments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contestantId, judgeId }),
+      });
 
-    if (!res.ok) {
+      if (!res.ok) {
+        throw new Error('Không cập nhật được phân công.');
+      }
+
+      // Cập nhật nhẹ contestants local để các phần phụ thuộc dữ liệu này không lệch quá xa
+      setContestants((prev) =>
+        prev.map((contestant) => {
+          if (contestant.id !== contestantId) return contestant;
+
+          const currentCanEdit = contestant.assignments?.[0]?.can_edit ?? false;
+
+          return {
+            ...contestant,
+            assignments: judgeId
+              ? [{ judge_id: judgeId, can_edit: currentCanEdit }]
+              : [],
+          };
+        })
+      );
+    } catch (error) {
+      console.error('updateAssignment error:', error);
+
+      // Nếu lỗi thì trả lại giá trị cũ
+      setSelectedJudges((prev) => ({
+        ...prev,
+        [contestantId]: oldJudgeId,
+      }));
+
       alert('Không cập nhật được phân công.');
+    } finally {
       setSavingId(null);
-      return;
     }
-
-    await reloadContestants();
-    setSavingId(null);
   }
 
   async function reopenScore(contestantId: string) {
     setSavingId(contestantId);
-    const res = await fetch('/api/admin/assignments/reopen', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ contestantId }),
-    });
 
-    if (!res.ok) {
+    try {
+      const res = await fetch('/api/admin/assignments/reopen', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contestantId }),
+      });
+
+      if (!res.ok) {
+        throw new Error('Không mở lại được phiếu chấm.');
+      }
+
+      await reloadContestants();
+    } catch (error) {
+      console.error('reopenScore error:', error);
       alert('Không mở lại được phiếu chấm.');
+    } finally {
       setSavingId(null);
-      return;
     }
-
-    await reloadContestants();
-    setSavingId(null);
   }
 
   const filteredContestants = useMemo(() => {
@@ -82,29 +154,42 @@ export function AssignmentManager() {
     if (!keyword) return contestants;
 
     return contestants.filter((contestant) => {
-      const currentJudgeId = contestant.assignments?.[0]?.judge_id ?? '';
+      const currentJudgeId = selectedJudges[contestant.id] ?? '';
       const judgeName = judges.find((judge) => judge.id === currentJudgeId)?.full_name ?? '';
-      return [contestant.sbd, contestant.full_name, judgeName].some((value) => value.toLowerCase().includes(keyword));
-    });
-  }, [contestants, judges, query]);
 
-  const assignedCount = contestants.filter((contestant) => contestant.assignments?.[0]?.judge_id).length;
+      return [contestant.sbd, contestant.full_name, judgeName].some((value) =>
+        value.toLowerCase().includes(keyword)
+      );
+    });
+  }, [contestants, judges, query, selectedJudges]);
+
+  const assignedCount = contestants.filter(
+    (contestant) => (selectedJudges[contestant.id] ?? '').trim() !== ''
+  ).length;
+
   const uploadedVideoCount = contestants.filter((contestant) => contestant.video_path).length;
-  const submittedCount = contestants.filter((contestant) => contestant.score_sheets?.[0]?.status === 'submitted').length;
+
+  const submittedCount = contestants.filter(
+    (contestant) => contestant.score_sheets?.[0]?.status === 'submitted'
+  ).length;
 
   return (
     <div className="stack-lg">
       <section className="stats-grid">
         <div className="stat-card compact">
           <div className="stat-label">Đã phân công</div>
-          <div className="stat-value">{assignedCount}/{contestants.length}</div>
+          <div className="stat-value">
+            {assignedCount}/{contestants.length}
+          </div>
           <div className="stat-hint">Số thí sinh đã có giám khảo phụ trách.</div>
         </div>
+
         <div className="stat-card compact">
           <div className="stat-label">Đã có video</div>
           <div className="stat-value">{uploadedVideoCount}</div>
           <div className="stat-hint">Kiểm tra nhanh tiến độ upload video trước khi chấm.</div>
         </div>
+
         <div className="stat-card compact">
           <div className="stat-label">Phiếu đã nộp</div>
           <div className="stat-value">{submittedCount}</div>
@@ -116,8 +201,11 @@ export function AssignmentManager() {
         <div className="card-header split-header">
           <div>
             <h3 className="card-title">Bảng phân công giám khảo</h3>
-            <p className="card-subtitle">Tìm theo SBD, tên thí sinh hoặc tên giám khảo. Thay đổi sẽ được lưu ngay sau khi chọn.</p>
+            <p className="card-subtitle">
+              Tìm theo SBD, tên thí sinh hoặc tên giám khảo. Thay đổi sẽ được lưu ngay sau khi chọn.
+            </p>
           </div>
+
           <div className="search-box">
             <input
               value={query}
@@ -139,27 +227,30 @@ export function AssignmentManager() {
                 <th>Phiếu chấm</th>
               </tr>
             </thead>
+
             <tbody>
               {filteredContestants.map((contestant) => {
-                const currentJudge = contestant.assignments?.[0]?.judge_id ?? '';
+                const currentJudge = selectedJudges[contestant.id] ?? '';
                 const assignment = contestant.assignments?.[0];
                 const sheet = contestant.score_sheets?.[0];
+
                 return (
                   <tr key={contestant.id}>
                     <td className="strong-cell">{contestant.sbd}</td>
                     <td>{contestant.full_name}</td>
+
                     <td>
                       <StatusBadge tone={contestant.video_path ? 'success' : 'danger'}>
                         {contestant.video_path ? 'Đã upload' : 'Chưa có video'}
                       </StatusBadge>
                     </td>
+
                     <td>
                       <select
                         value={currentJudge}
                         onChange={(e) => updateAssignment(contestant.id, e.target.value)}
                         disabled={savingId === contestant.id}
                         className="select"
-                  
                       >
                         <option value="">-- Chọn giám khảo --</option>
                         {judges.map((judge) => (
@@ -169,10 +260,17 @@ export function AssignmentManager() {
                         ))}
                       </select>
                     </td>
+
                     <td>
                       <div className="row-actions">
                         <StatusBadge
-                          tone={sheet?.status === 'submitted' ? (assignment?.can_edit ? 'warning' : 'success') : 'neutral'}
+                          tone={
+                            sheet?.status === 'submitted'
+                              ? assignment?.can_edit
+                                ? 'warning'
+                                : 'success'
+                              : 'neutral'
+                          }
                         >
                           {sheet?.status === 'submitted'
                             ? assignment?.can_edit
@@ -180,6 +278,7 @@ export function AssignmentManager() {
                               : 'Đã nộp - đang khóa'
                             : 'Chưa nộp'}
                         </StatusBadge>
+
                         {sheet?.status === 'submitted' && !assignment?.can_edit ? (
                           <button
                             onClick={() => reopenScore(contestant.id)}
