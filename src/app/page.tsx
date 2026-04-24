@@ -12,7 +12,7 @@ export default function HomePage() {
           <div className="hero-actions">
             <Link href="/login" className="btn btn-primary">Đăng nhập hệ thống</Link>
      
-          <div className="poster-card">
+         
             <img src="/speakup-keyvisual.jpg" alt="Speak Up DNU 2026 key visual" />
             
           </div>
