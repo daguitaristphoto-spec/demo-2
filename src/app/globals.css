@@ -1139,3 +1139,17 @@ select option:hover {
   background-color: #2563eb !important;
   color: #ffffff !important;
 }
+.shell-main {
+  background-image: none !important;
+  background-color: transparent;
+}
+
+.shell-main::before,
+.shell-main::after,
+.shell-layout::before,
+.shell-layout::after,
+body::before,
+body::after {
+  content: none !important;
+  display: none !important;
+}
