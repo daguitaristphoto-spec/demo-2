@@ -209,25 +209,69 @@ export default function JudgeAssignmentsPage() {
             Chưa có tài khoản giám khảo hoặc chưa tải được danh sách giám khảo.
           </p>
         ) : (
-          <div className="mt-4 grid gap-3 md:grid-cols-2">
-            {judges.map((judge) => (
-              <label
-                key={judge.id}
-                className="flex cursor-pointer items-center gap-3 rounded-xl border p-3 hover:bg-slate-50"
-              >
-                <input
-                  type="checkbox"
-                  checked={selectedJudgeIds.includes(judge.id)}
-                  onChange={() => toggleJudge(judge.id)}
-                />
+          <div
+  style={{
+    display: "flex",
+    flexDirection: "column",
+    gap: "12px",
+    marginTop: "16px",
+    maxWidth: "720px",
+  }}
+>
+  {judges.map((judge) => (
+    <label
+      key={judge.id}
+      style={{
+        display: "flex",
+        alignItems: "flex-start",
+        gap: "10px",
+        padding: "12px 14px",
+        border: "1px solid rgba(255,255,255,0.25)",
+        borderRadius: "12px",
+        cursor: "pointer",
+        background: "rgba(255,255,255,0.06)",
+      }}
+    >
+      <input
+        type="checkbox"
+        checked={selectedJudgeIds.includes(judge.id)}
+        onChange={() => toggleJudge(judge.id)}
+        style={{
+          marginTop: "4px",
+        }}
+      />
 
-                <span>
-                  <span className="block font-medium">{judge.full_name}</span>
-                  <span className="block text-xs text-slate-500">{judge.email}</span>
-                </span>
-              </label>
-            ))}
-          </div>
+      <span
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: "4px",
+        }}
+      >
+        <span
+          style={{
+            fontWeight: 700,
+            fontSize: "16px",
+            lineHeight: "1.3",
+          }}
+        >
+          {judge.full_name}
+        </span>
+
+        <span
+          style={{
+            fontSize: "14px",
+            opacity: 0.8,
+            lineHeight: "1.3",
+            wordBreak: "break-all",
+          }}
+        >
+          {judge.email || "Chưa có email"}
+        </span>
+      </span>
+    </label>
+  ))}
+</div>
         )}
 
         <button
