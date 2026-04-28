@@ -32,7 +32,7 @@ async function requireAdmin(supabase: any) {
 }
 
 export async function GET(req: Request) {
-  const supabase = createClient();
+ const supabase = await createClient();
   const auth = await requireAdmin(supabase);
   if ("error" in auth) return auth.error;
 
