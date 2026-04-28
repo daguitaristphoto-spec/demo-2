@@ -9,6 +9,7 @@ const ADMIN_NAV = [
   { href: '/admin/assignments', label: 'Phân công giám khảo', description: 'Gán đúng 1 giám khảo cho mỗi thí sinh.' },
   { href: '/admin/judge-assignments', label: 'Phân công GK vòng 2-3', description: 'Gán giám khảo cho từng vòng/chặng thi.' },
   { href: '/admin/upload', label: 'Upload video', description: 'Lưu video dự thi để giám khảo xem trực tiếp.' },
+  { href: '/admin/results', label: 'Kết quả', description: 'Tổng hợp điểm, xếp hạng và xuất phiếu chấm điểm.' },
 ];
 
 export default async function AdminDashboardPage() {
