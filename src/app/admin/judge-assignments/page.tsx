@@ -2,12 +2,6 @@
 
 import { useEffect, useState } from "react";
 
-type Segment = {
-  id: string;
-  name: string;
-  stage_name?: string | null;
-};
-
 type Judge = {
   id: string;
   full_name: string;
@@ -19,8 +13,25 @@ type AssignedJudge = {
   judge_id: string;
 };
 
+const ASSIGNMENT_SEGMENTS = [
+  {
+    id: "round1_online",
+    label: "Vòng 1: Chấm online",
+    realSegmentIds: ["round1_online"],
+  },
+  {
+    id: "round2_semifinal",
+    label: "Vòng 2: Bán kết - Vượt ải",
+    realSegmentIds: ["round2_semifinal"],
+  },
+  {
+    id: "round3_final",
+    label: "Vòng 3: Chung kết",
+    realSegmentIds: ["round3_stage1", "round3_stage2", "round3_stage3"],
+  },
+];
+
 export default function JudgeAssignmentsPage() {
-  const [segments, setSegments] = useState<Segment[]>([]);
   const [judges, setJudges] = useState<Judge[]>([]);
   const [segmentId, setSegmentId] = useState("");
   const [selectedJudgeIds, setSelectedJudgeIds] = useState<string[]>([]);
@@ -28,7 +39,7 @@ export default function JudgeAssignmentsPage() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    loadInitialData();
+    loadJudges();
   }, []);
 
   useEffect(() => {
@@ -39,34 +50,29 @@ export default function JudgeAssignmentsPage() {
     }
   }, [segmentId]);
 
-  async function loadInitialData() {
+  async function loadJudges() {
     setLoading(true);
     setMessage("");
 
     try {
-      const segmentsRes = await fetch("/api/admin/segments");
-      const segmentsJson = await segmentsRes.json();
-
       const judgesRes = await fetch("/api/admin/judges");
       const judgesJson = await judgesRes.json();
-
-      if (!segmentsRes.ok) {
-        setMessage(segmentsJson.error || "Không tải được danh sách vòng/chặng");
-        return;
-      }
 
       if (!judgesRes.ok) {
         setMessage(judgesJson.error || "Không tải được danh sách giám khảo");
         return;
       }
 
-      setSegments(segmentsJson.segments || []);
       setJudges(judgesJson.judges || []);
     } catch {
-      setMessage("Có lỗi khi tải dữ liệu");
+      setMessage("Có lỗi khi tải danh sách giám khảo");
     } finally {
       setLoading(false);
     }
+  }
+
+  function getSelectedAssignmentSegment() {
+    return ASSIGNMENT_SEGMENTS.find((item) => item.id === segmentId);
   }
 
   async function loadAssignedJudges(nextSegmentId: string) {
@@ -74,7 +80,18 @@ export default function JudgeAssignmentsPage() {
     setMessage("");
 
     try {
-      const res = await fetch(`/api/admin/segment-judges?segmentId=${nextSegmentId}`);
+      const assignmentSegment = ASSIGNMENT_SEGMENTS.find((item) => item.id === nextSegmentId);
+
+      if (!assignmentSegment) {
+        setSelectedJudgeIds([]);
+        return;
+      }
+
+      // Với vòng 3, chỉ cần đọc phân công từ chặng 1.
+      // Khi lưu, hệ thống sẽ đồng bộ cùng danh sách giám khảo cho cả 3 chặng.
+      const segmentToRead = assignmentSegment.realSegmentIds[0];
+
+      const res = await fetch(`/api/admin/segment-judges?segmentId=${segmentToRead}`);
       const json = await res.json();
 
       if (!res.ok) {
@@ -103,7 +120,14 @@ export default function JudgeAssignmentsPage() {
 
   async function saveAssignments() {
     if (!segmentId) {
-      setMessage("Vui lòng chọn vòng/chặng thi");
+      setMessage("Vui lòng chọn vòng thi");
+      return;
+    }
+
+    const assignmentSegment = getSelectedAssignmentSegment();
+
+    if (!assignmentSegment) {
+      setMessage("Vòng thi không hợp lệ");
       return;
     }
 
@@ -111,21 +135,27 @@ export default function JudgeAssignmentsPage() {
     setMessage("");
 
     try {
-      const res = await fetch("/api/admin/segment-judges", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          segmentId,
-          judgeIds: selectedJudgeIds,
-          replace: true,
-        }),
-      });
+      // Nếu chọn Vòng 3, sẽ lưu cùng một danh sách giám khảo cho cả 3 chặng.
+      const results = await Promise.all(
+        assignmentSegment.realSegmentIds.map((realSegmentId) =>
+          fetch("/api/admin/segment-judges", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              segmentId: realSegmentId,
+              judgeIds: selectedJudgeIds,
+              replace: true,
+            }),
+          })
+        )
+      );
 
-      const json = await res.json();
+      const failed = results.find((res) => !res.ok);
 
-      if (!res.ok) {
+      if (failed) {
+        const json = await failed.json();
         setMessage(json.error || "Không lưu được phân công");
         return;
       }
@@ -143,27 +173,32 @@ export default function JudgeAssignmentsPage() {
       <div className="mb-6">
         <h1 className="text-2xl font-bold">Phân công giám khảo theo vòng</h1>
         <p className="mt-2 text-sm text-slate-600">
-          Chọn vòng/chặng thi, sau đó tick các giám khảo được phép chấm vòng/chặng đó.
+          Chọn vòng thi, sau đó tick các giám khảo được phép chấm vòng đó.
         </p>
       </div>
 
       <section className="rounded-2xl border bg-white p-4 shadow-sm">
-        <label className="block text-sm font-medium">Vòng/chặng thi</label>
+        <label className="block text-sm font-medium">Vòng thi</label>
 
         <select
           className="mt-2 w-full rounded-lg border p-2"
           value={segmentId}
           onChange={(e) => setSegmentId(e.target.value)}
         >
-          <option value="">-- Chọn vòng/chặng --</option>
+          <option value="">-- Chọn vòng thi --</option>
 
-          {segments.map((segment) => (
+          {ASSIGNMENT_SEGMENTS.map((segment) => (
             <option key={segment.id} value={segment.id}>
-              {segment.name}
-              {segment.stage_name ? ` - ${segment.stage_name}` : ""}
+              {segment.label}
             </option>
           ))}
         </select>
+
+        {segmentId === "round3_final" && (
+          <p className="mt-2 text-sm text-slate-500">
+            Giám khảo được chọn ở đây sẽ được gán chung cho cả 3 chặng của vòng chung kết.
+          </p>
+        )}
       </section>
 
       <section className="mt-6 rounded-2xl border bg-white p-4 shadow-sm">
