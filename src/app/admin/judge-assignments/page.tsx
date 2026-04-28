@@ -14,11 +14,7 @@ type AssignedJudge = {
 };
 
 const ASSIGNMENT_SEGMENTS = [
-  {
-    id: "round1_online",
-    label: "Vòng 1: Chấm online",
-    realSegmentIds: ["round1_online"],
-  },
+
   {
     id: "round2_semifinal",
     label: "Vòng 2: Bán kết - Vượt ải",
