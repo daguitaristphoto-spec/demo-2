@@ -5,7 +5,16 @@ import { StatCard } from '@/components/ui/stat-card';
 import { StatusBadge } from '@/components/ui/status-badge';
 
 const JUDGE_NAV = [
-  { href: '/judge', label: 'Danh sách được giao', description: 'Xem toàn bộ thí sinh bạn đang phụ trách.' },
+  {
+    href: '/judge',
+    label: 'Chấm vòng 1',
+    description: 'Xem toàn bộ thí sinh bạn được phân công ở vòng sơ loại.',
+  },
+  {
+    href: '/judge/live',
+    label: 'Chấm trực tiếp vòng 2-3',
+    description: 'Chấm các thí sinh ở vòng bán kết và chung kết.',
+  },
 ];
 
 export default async function JudgeDashboardPage() {
@@ -35,6 +44,25 @@ export default async function JudgeDashboardPage() {
       navItems={JUDGE_NAV}
       activeHref="/judge"
     >
+      <section className="card-surface">
+        <div className="card-header">
+          <h3 className="card-title">Khu vực chấm điểm</h3>
+          <p className="card-subtitle">
+            Vòng 1 sử dụng danh sách thí sinh được phân công. Vòng 2 và vòng 3 sử dụng giao diện chấm trực tiếp.
+          </p>
+        </div>
+
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+          <Link href="/judge" className="btn btn-primary">
+            Chấm vòng 1
+          </Link>
+
+          <Link href="/judge/live" className="btn btn-secondary">
+            Chấm trực tiếp vòng 2-3
+          </Link>
+        </div>
+      </section>
+
       <section className="stats-grid">
         <StatCard label="Được phân công" value={assignments?.length ?? 0} hint="Tổng số thí sinh bạn cần chấm." />
         <StatCard label="Đã nộp phiếu" value={submittedCount} hint="Số phiếu đã nộp chính thức." />
@@ -43,9 +71,10 @@ export default async function JudgeDashboardPage() {
 
       <section className="card-surface">
         <div className="card-header">
-          <h3 className="card-title">Danh sách thí sinh được giao</h3>
+          <h3 className="card-title">Danh sách thí sinh được giao ở vòng 1</h3>
           <p className="card-subtitle">Mở từng bài để xem video, nhập điểm và nộp phiếu chính thức.</p>
         </div>
+
         <div className="table-wrap">
           <table className="data-table">
             <thead>
@@ -58,15 +87,18 @@ export default async function JudgeDashboardPage() {
                 <th></th>
               </tr>
             </thead>
+
             <tbody>
               {(assignments ?? []).map((row: any) => {
                 const contestant = Array.isArray(row.contestant) ? row.contestant[0] : row.contestant;
                 const sheet = sheetMap.get(row.contestant_id);
-                const status = sheet?.status === 'submitted'
-                  ? row.can_edit
-                    ? { label: 'Đã nộp - đang mở lại', tone: 'warning' as const }
-                    : { label: 'Đã nộp', tone: 'success' as const }
-                  : { label: 'Chưa nộp', tone: 'neutral' as const };
+
+                const status =
+                  sheet?.status === 'submitted'
+                    ? row.can_edit
+                      ? { label: 'Đã nộp - đang mở lại', tone: 'warning' as const }
+                      : { label: 'Đã nộp', tone: 'success' as const }
+                    : { label: 'Chưa nộp', tone: 'neutral' as const };
 
                 return (
                   <tr key={contestant?.id}>
