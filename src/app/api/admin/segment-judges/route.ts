@@ -56,7 +56,7 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const auth = await requireAdmin(supabase);
   if ("error" in auth) return auth.error;
 
