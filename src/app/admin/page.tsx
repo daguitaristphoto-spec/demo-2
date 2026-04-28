@@ -7,6 +7,7 @@ const ADMIN_NAV = [
   { href: '/admin', label: 'Tổng quan', description: 'Theo dõi tiến độ và các bước vận hành.' },
   { href: '/admin/import', label: 'Import thí sinh', description: 'Đưa danh sách từ Excel vào hệ thống.' },
   { href: '/admin/assignments', label: 'Phân công giám khảo', description: 'Gán đúng 1 giám khảo cho mỗi thí sinh.' },
+  { href: '/admin/judge-assignments', label: 'Phân công GK theo vòng', description: 'Gán giám khảo cho từng vòng/chặng thi.' },
   { href: '/admin/upload', label: 'Upload video', description: 'Lưu video dự thi để giám khảo xem trực tiếp.' },
 ];
 
