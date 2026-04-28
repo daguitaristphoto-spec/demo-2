@@ -33,6 +33,7 @@ export default async function AdminDashboardPage() {
           <Link href="/admin/import" className="btn btn-primary">Import thí sinh</Link>
           <Link href="/admin/assignments" className="btn btn-secondary">Phân công</Link>
           <Link href="/admin/upload" className="btn btn-secondary">Upload video</Link>
+          <Link href="/admin/judge-assignments" className="btn btn-secondary">Phân công theo vòng</Link>
         </>
       }
     >
