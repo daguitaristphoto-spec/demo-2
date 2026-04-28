@@ -30,7 +30,7 @@ export default function JudgeLiveScoringPage() {
   const [contestants, setContestants] = useState<Contestant[]>([]);
   const [contestantId, setContestantId] = useState("");
   const [criteria, setCriteria] = useState<Criterion[]>([]);
-  const [scores, setScores] = useState<Record<string, number>>({});
+  const [scores, setScores] = useState<Record<string, string>>({});
   const [strengths, setStrengths] = useState("");
   const [weaknesses, setWeaknesses] = useState("");
   const [notes, setNotes] = useState("");
@@ -64,6 +64,14 @@ export default function JudgeLiveScoringPage() {
       setContestantId("");
     }
   }, [segmentId]);
+
+  useEffect(() => {
+    setScores({});
+    setStrengths("");
+    setWeaknesses("");
+    setNotes("");
+    setMessage("");
+  }, [contestantId]);
 
   async function loadSegments() {
     setLoading(true);
@@ -137,13 +145,52 @@ export default function JudgeLiveScoringPage() {
     }
   }
 
-  function updateScore(criterionId: string, value: string) {
-    const nextValue = Math.max(0, Math.min(10, Number(value || 0)));
+  function updateScore(criterionId: string, rawValue: string, maxScore: number) {
+    const normalizedValue = rawValue.replace(",", ".").replace(/[^0-9.]/g, "");
+
+    if (normalizedValue === "") {
+      setScores((prev) => {
+        const next = { ...prev };
+        delete next[criterionId];
+        return next;
+      });
+      return;
+    }
+
+    const dotCount = (normalizedValue.match(/\./g) || []).length;
+    if (dotCount > 1) {
+      return;
+    }
+
+    const numericValue = Number(normalizedValue);
+
+    if (Number.isNaN(numericValue)) {
+      return;
+    }
+
+    const safeMaxScore = Number(maxScore) || 10;
+
+    if (numericValue > safeMaxScore) {
+      setScores((prev) => ({
+        ...prev,
+        [criterionId]: String(safeMaxScore),
+      }));
+      return;
+    }
 
     setScores((prev) => ({
       ...prev,
-      [criterionId]: nextValue,
+      [criterionId]: normalizedValue,
     }));
+  }
+
+  function buildNumericScores() {
+    return Object.fromEntries(
+      Object.entries(scores).map(([criterionId, value]) => [
+        criterionId,
+        Number(value || 0),
+      ])
+    );
   }
 
   async function submitScore() {
@@ -169,7 +216,7 @@ export default function JudgeLiveScoringPage() {
         body: JSON.stringify({
           segmentId,
           contestantId,
-          scores,
+          scores: buildNumericScores(),
           strengths,
           weaknesses,
           notes,
@@ -210,6 +257,7 @@ export default function JudgeLiveScoringPage() {
           value={segmentId}
           onChange={(e) => setSegmentId(e.target.value)}
           style={{ display: "block", marginTop: 8, width: "100%", padding: 10 }}
+          disabled={loading}
         >
           <option value="">-- Chọn vòng/chặng --</option>
 
@@ -231,6 +279,7 @@ export default function JudgeLiveScoringPage() {
           value={contestantId}
           onChange={(e) => setContestantId(e.target.value)}
           style={{ display: "block", marginTop: 8, width: "100%", padding: 10 }}
+          disabled={loading || !segmentId}
         >
           <option value="">-- Chọn thí sinh --</option>
 
@@ -271,13 +320,25 @@ export default function JudgeLiveScoringPage() {
                 </span>
 
                 <input
-                  type="number"
-                  min={0}
-                  max={10}
-                  step={0.25}
+                  type="text"
+                  inputMode="decimal"
                   value={scores[criterion.id] ?? ""}
-                  onChange={(e) => updateScore(criterion.id, e.target.value)}
-                  style={{ padding: 8 }}
+                  onChange={(e) =>
+                    updateScore(criterion.id, e.target.value, Number(criterion.max_score))
+                  }
+                  onWheel={(e) => e.currentTarget.blur()}
+                  onKeyDown={(e) => {
+                    if (["e", "E", "+", "-"].includes(e.key)) {
+                      e.preventDefault();
+                    }
+                  }}
+                  disabled={loading}
+                  style={{
+                    width: "90px",
+                    padding: "8px 10px",
+                    borderRadius: 10,
+                    textAlign: "center",
+                  }}
                 />
               </label>
             ))}
@@ -291,6 +352,7 @@ export default function JudgeLiveScoringPage() {
               value={strengths}
               onChange={(e) => setStrengths(e.target.value)}
               style={{ display: "block", width: "100%", minHeight: 80, marginTop: 8 }}
+              disabled={loading}
             />
           </section>
 
@@ -302,6 +364,7 @@ export default function JudgeLiveScoringPage() {
               value={weaknesses}
               onChange={(e) => setWeaknesses(e.target.value)}
               style={{ display: "block", width: "100%", minHeight: 80, marginTop: 8 }}
+              disabled={loading}
             />
           </section>
 
@@ -313,12 +376,17 @@ export default function JudgeLiveScoringPage() {
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               style={{ display: "block", width: "100%", minHeight: 80, marginTop: 8 }}
+              disabled={loading}
             />
           </section>
 
           <h3 style={{ marginTop: 20 }}>Tổng điểm tạm tính: {totalScore}</h3>
 
-          <button onClick={submitScore} disabled={loading} style={{ marginTop: 12, padding: "10px 16px" }}>
+          <button
+            onClick={submitScore}
+            disabled={loading}
+            style={{ marginTop: 12, padding: "10px 16px" }}
+          >
             {loading ? "Đang nộp..." : "Nộp điểm"}
           </button>
         </section>
