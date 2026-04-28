@@ -20,7 +20,13 @@ type Props = {
   items?: ExistingItem[];
 };
 
-export function ScoreForm({ contestantId, canEdit, strengths: initialStrengths, weaknesses: initialWeaknesses, items = [] }: Props) {
+export function ScoreForm({
+  contestantId,
+  canEdit,
+  strengths: initialStrengths,
+  weaknesses: initialWeaknesses,
+  items = [],
+}: Props) {
   const [strengths, setStrengths] = useState(initialStrengths ?? '');
   const [weaknesses, setWeaknesses] = useState(initialWeaknesses ?? '');
   const [loading, setLoading] = useState(false);
@@ -46,6 +52,37 @@ export function ScoreForm({ contestantId, canEdit, strengths: initialStrengths, 
   );
 
   const scoreResult = calculateRound1Score(scoreItems);
+
+  function updateScore(criterionKey: string, rawValue: string, maxScore: number) {
+    const normalizedValue = rawValue.replace(',', '.').replace(/[^0-9.]/g, '');
+
+    if (normalizedValue === '') {
+      setValues((prev) => {
+        const next = { ...prev };
+        delete next[criterionKey];
+        return next;
+      });
+      return;
+    }
+
+    const dotCount = (normalizedValue.match(/\./g) || []).length;
+    if (dotCount > 1) {
+      return;
+    }
+
+    const numericValue = Number(normalizedValue);
+
+    if (Number.isNaN(numericValue)) {
+      return;
+    }
+
+    const clampedValue = Math.min(Math.max(numericValue, 0), maxScore);
+
+    setValues((prev) => ({
+      ...prev,
+      [criterionKey]: clampedValue,
+    }));
+  }
 
   async function persist(action: 'save' | 'submit') {
     setLoading(true);
@@ -84,7 +121,9 @@ export function ScoreForm({ contestantId, canEdit, strengths: initialStrengths, 
         <div>
           <div className="eyebrow">Speak Up DNU 2026</div>
           <h2 className="card-title">Phiếu chấm vòng 1</h2>
-          <p className="card-subtitle">Điểm được quy đổi tự động theo trọng số 100 điểm, giữ đúng cấu trúc bảng chấm vòng sơ loại.</p>
+          <p className="card-subtitle">
+            Điểm được quy đổi tự động theo trọng số 100 điểm, giữ đúng cấu trúc bảng chấm vòng sơ loại.
+          </p>
         </div>
         <div className="score-summary-box">
           <div className="score-summary-label">Tổng điểm</div>
@@ -106,19 +145,24 @@ export function ScoreForm({ contestantId, canEdit, strengths: initialStrengths, 
                 <p>Trọng số {group.weight * 100}%</p>
               </div>
             </div>
+
             <div className="criteria-items">
               {group.items.map((item) => (
                 <div key={item.key} className="criterion-row">
                   <label className="criterion-label">{item.label}</label>
                   <div className="criterion-input-wrap">
                     <input
-                      type="number"
-                      min={0}
-                      max={item.max}
-                      step={0.5}
+                      type="text"
+                      inputMode="decimal"
                       disabled={!canEdit || loading}
                       value={values[item.key] ?? ''}
-                      onChange={(e) => setValues((prev) => ({ ...prev, [item.key]: Number(e.target.value) }))}
+                      onChange={(e) => updateScore(item.key, e.target.value, Number(item.max))}
+                      onWheel={(e) => e.currentTarget.blur()}
+                      onKeyDown={(e) => {
+                        if (['e', 'E', '+', '-'].includes(e.key)) {
+                          e.preventDefault();
+                        }
+                      }}
                       className="input score-input"
                     />
                     <span className="criterion-max">/ {item.max}</span>
