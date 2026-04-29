@@ -21,7 +21,7 @@ const ROUND_CONFIG: Record<
   },
 };
 
-async function getCurrentUserAndProfile() {
+async function getCurrentJudge() {
   const supabase = await createClient();
   const adminSupabase = createAdminClient();
 
@@ -52,7 +52,6 @@ async function getCurrentUserAndProfile() {
   }
 
   return {
-    supabase,
     adminSupabase,
     user,
     profile,
@@ -70,35 +69,205 @@ async function countCompletedJudges(adminSupabase: any, roundKey: string) {
     throw new Error(error.message);
   }
 
-  const uniqueJudgeIds = new Set((data || []).map((row: any) => row.judge_id));
-
-  return uniqueJudgeIds.size;
+  return new Set((data || []).map((row: any) => row.judge_id)).size;
 }
 
-async function checkJudgeHasSubmittedSomething(
-  adminSupabase: any,
-  judgeId: string,
-  roundKey: string
-) {
-  const config = ROUND_CONFIG[roundKey];
+async function getRound2ExpectedContestants(adminSupabase: any) {
+  const { data: pairs, error: pairsError } = await adminSupabase
+    .from("round2_pairs")
+    .select("id")
+    .eq("segment_id", "round2_semifinal");
+
+  if (pairsError) {
+    throw new Error(pairsError.message);
+  }
+
+  const pairIds = (pairs || []).map((pair: any) => pair.id);
+
+  if (pairIds.length === 0) {
+    return [];
+  }
+
+  const { data: members, error: membersError } = await adminSupabase
+    .from("round2_pair_members")
+    .select("contestant_id")
+    .in("pair_id", pairIds);
+
+  if (membersError) {
+    throw new Error(membersError.message);
+  }
+
+  return [...new Set((members || []).map((member: any) => member.contestant_id))];
+}
+
+async function getRound3ExpectedContestantsByStage(adminSupabase: any) {
+  const result: Record<string, string[]> = {
+    round3_stage1: [],
+    round3_stage2: [],
+    round3_stage3: [],
+  };
 
   const { data, error } = await adminSupabase
-    .from("score_sheets")
-    .select("id")
-    .eq("judge_id", judgeId)
-    .eq("status", "submitted")
-    .in("segment_id", config.segments)
-    .limit(1);
+    .from("segment_contestants")
+    .select("segment_id, contestant_id")
+    .in("segment_id", ["round3_stage1", "round3_stage2", "round3_stage3"]);
 
   if (error) {
     throw new Error(error.message);
   }
 
-  return (data || []).length > 0;
+  for (const row of data || []) {
+    if (!result[row.segment_id]) {
+      result[row.segment_id] = [];
+    }
+
+    result[row.segment_id].push(row.contestant_id);
+  }
+
+  return result;
+}
+
+async function getSubmittedContestants(
+  adminSupabase: any,
+  judgeId: string,
+  segmentId: string,
+  contestantIds: string[]
+) {
+  if (contestantIds.length === 0) return new Set<string>();
+
+  const { data, error } = await adminSupabase
+    .from("score_sheets")
+    .select("contestant_id")
+    .eq("judge_id", judgeId)
+    .eq("segment_id", segmentId)
+    .eq("status", "submitted")
+    .in("contestant_id", contestantIds);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return new Set((data || []).map((row: any) => row.contestant_id));
+}
+
+async function checkRound2Completeness(adminSupabase: any, judgeId: string) {
+  const expectedContestantIds = await getRound2ExpectedContestants(adminSupabase);
+
+  if (expectedContestantIds.length === 0) {
+    return {
+      ok: false,
+      missingCount: 0,
+      expectedCount: 0,
+      message: "Chưa có danh sách cặp vòng 2. Admin cần gán cặp trước.",
+    };
+  }
+
+  const submittedContestantIds = await getSubmittedContestants(
+    adminSupabase,
+    judgeId,
+    "round2_semifinal",
+    expectedContestantIds
+  );
+
+  const missingCount = expectedContestantIds.filter(
+    (contestantId) => !submittedContestantIds.has(contestantId)
+  ).length;
+
+  return {
+    ok: missingCount === 0,
+    missingCount,
+    expectedCount: expectedContestantIds.length,
+    message:
+      missingCount === 0
+        ? "Đã nộp đủ điểm vòng 2."
+        : `Bạn còn ${missingCount}/${expectedContestantIds.length} thí sinh vòng 2 chưa nộp điểm.`,
+  };
+}
+
+async function checkRound3Completeness(adminSupabase: any, judgeId: string) {
+  const expectedByStage = await getRound3ExpectedContestantsByStage(adminSupabase);
+
+  const stage1Ids = expectedByStage.round3_stage1 || [];
+  const stage2Ids = expectedByStage.round3_stage2 || [];
+  const stage3Ids = expectedByStage.round3_stage3 || [];
+
+  if (stage1Ids.length === 0 || stage2Ids.length === 0) {
+    return {
+      ok: false,
+      missingCount: 0,
+      expectedCount: 0,
+      message: "Chưa có danh sách thí sinh vòng 3 chặng 1 và chặng 2.",
+    };
+  }
+
+  if (stage3Ids.length === 0) {
+    return {
+      ok: false,
+      missingCount: 0,
+      expectedCount: stage1Ids.length + stage2Ids.length,
+      message:
+        "Chặng 3 chưa mở. Admin cần lấy Top thí sinh sau chặng 1 + chặng 2 vào chặng 3 trước.",
+    };
+  }
+
+  const stage1Submitted = await getSubmittedContestants(
+    adminSupabase,
+    judgeId,
+    "round3_stage1",
+    stage1Ids
+  );
+
+  const stage2Submitted = await getSubmittedContestants(
+    adminSupabase,
+    judgeId,
+    "round3_stage2",
+    stage2Ids
+  );
+
+  const stage3Submitted = await getSubmittedContestants(
+    adminSupabase,
+    judgeId,
+    "round3_stage3",
+    stage3Ids
+  );
+
+  const stage1Missing = stage1Ids.filter((id) => !stage1Submitted.has(id)).length;
+  const stage2Missing = stage2Ids.filter((id) => !stage2Submitted.has(id)).length;
+  const stage3Missing = stage3Ids.filter((id) => !stage3Submitted.has(id)).length;
+
+  const missingCount = stage1Missing + stage2Missing + stage3Missing;
+  const expectedCount = stage1Ids.length + stage2Ids.length + stage3Ids.length;
+
+  return {
+    ok: missingCount === 0,
+    missingCount,
+    expectedCount,
+    message:
+      missingCount === 0
+        ? "Đã nộp đủ điểm vòng 3."
+        : `Bạn còn ${missingCount}/${expectedCount} phiếu vòng 3 chưa nộp. Chặng 1 còn ${stage1Missing}, chặng 2 còn ${stage2Missing}, chặng 3 còn ${stage3Missing}.`,
+  };
+}
+
+async function checkCompleteness(adminSupabase: any, judgeId: string, roundKey: string) {
+  if (roundKey === "round2") {
+    return checkRound2Completeness(adminSupabase, judgeId);
+  }
+
+  if (roundKey === "round3") {
+    return checkRound3Completeness(adminSupabase, judgeId);
+  }
+
+  return {
+    ok: false,
+    missingCount: 0,
+    expectedCount: 0,
+    message: "roundKey không hợp lệ.",
+  };
 }
 
 export async function POST(req: Request) {
-  const auth = await getCurrentUserAndProfile();
+  const auth = await getCurrentJudge();
 
   if ("error" in auth) {
     return auth.error;
@@ -117,16 +286,14 @@ export async function POST(req: Request) {
   }
 
   try {
-    const hasSubmittedSomething = await checkJudgeHasSubmittedSomething(
-      adminSupabase,
-      profile.id,
-      roundKey
-    );
+    const completeness = await checkCompleteness(adminSupabase, profile.id, roundKey);
 
-    if (!hasSubmittedSomething) {
+    if (!completeness.ok) {
       return NextResponse.json(
         {
-          error: `Bạn chưa có phiếu chấm đã nộp ở ${ROUND_CONFIG[roundKey].label}.`,
+          error: completeness.message,
+          missingCount: completeness.missingCount,
+          expectedCount: completeness.expectedCount,
         },
         { status: 400 }
       );
@@ -173,14 +340,13 @@ export async function POST(req: Request) {
 }
 
 export async function GET(req: Request) {
-  const auth = await getCurrentUserAndProfile();
+  const auth = await getCurrentJudge();
 
   if ("error" in auth) {
     return auth.error;
   }
 
   const { adminSupabase, profile } = auth;
-
   const { searchParams } = new URL(req.url);
   const roundKey = String(searchParams.get("roundKey") || "");
 
@@ -204,6 +370,7 @@ export async function GET(req: Request) {
     }
 
     const completedJudgeCount = await countCompletedJudges(adminSupabase, roundKey);
+    const completeness = await checkCompleteness(adminSupabase, profile.id, roundKey);
 
     return NextResponse.json({
       ok: true,
@@ -214,6 +381,10 @@ export async function GET(req: Request) {
       completedJudgeCount,
       requiredJudgeCount: REQUIRED_JUDGE_COUNT,
       readyToFinalize: completedJudgeCount >= REQUIRED_JUDGE_COUNT,
+      canComplete: completeness.ok,
+      completenessMessage: completeness.message,
+      missingCount: completeness.missingCount,
+      expectedCount: completeness.expectedCount,
     });
   } catch (error: any) {
     return NextResponse.json(
