@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { requireRole } from '@/lib/auth-guard';
+import { RoundCompletionStatus } from '@/components/admin/round-completion-status';
 
 export default async function AdminResultsPage() {
   await requireRole('admin');
@@ -13,6 +14,8 @@ export default async function AdminResultsPage() {
           Quản lý tổng hợp điểm, xếp hạng thí sinh và xuất phiếu chấm điểm theo từng vòng.
         </p>
       </div>
+
+      <RoundCompletionStatus />
 
       <section
         style={{
@@ -108,19 +111,23 @@ export default async function AdminResultsPage() {
           </p>
         </Link>
 
-        <div
+        <Link
+          href="/admin/round3-score-sheets/print"
+          target="_blank"
           className="card-surface"
           style={{
+            display: 'block',
+            textDecoration: 'none',
+            color: 'inherit',
             padding: 20,
-            opacity: 0.55,
           }}
         >
           <div className="eyebrow">PDF</div>
           <h3 className="card-title">Xuất phiếu PDF vòng 3</h3>
           <p className="card-subtitle">
-            Sẽ bổ sung sau khi hoàn thiện mẫu phiếu chấm điểm cho 3 chặng chung kết.
+            Mở trang in toàn bộ phiếu chấm vòng 3 theo từng chặng chung kết.
           </p>
-        </div>
+        </Link>
       </section>
 
       <div style={{ marginTop: 24 }}>
