@@ -45,6 +45,8 @@ type ContestantSummary = {
 export default async function Round3ResultsPage() {
   const { supabase } = await requireRole("admin");
 
+  const segmentIds = ROUND3_SEGMENTS.map((item) => item.id);
+
   const { data: sheets, error } = await supabase
     .from("score_sheets")
     .select(`
@@ -57,7 +59,7 @@ export default async function Round3ResultsPage() {
       contestant:contestants(id, sbd, full_name),
       judge:profiles(id, full_name, email)
     `)
-    .in("segment_id", ROUND3_SEGMENTS.map((item) => item.id))
+    .in("segment_id", segmentIds)
     .eq("status", "submitted")
     .order("segment_id")
     .order("total_score", { ascending: false });
@@ -113,10 +115,10 @@ export default async function Round3ResultsPage() {
     current.stageScores[segmentId].push(score);
   }
 
-  const rows = Array.from(grouped.values()).map((row) => {
-    const stage1 = getAverage(row.stageScores.round3_stage1);
-    const stage2 = getAverage(row.stageScores.round3_stage2);
-    const stage3 = getAverage(row.stageScores.round3_stage3);
+  const rows: ContestantSummary[] = Array.from(grouped.values()).map((row) => {
+    const stage1 = getAverage(row.stageScores.round3_stage1 ?? []);
+    const stage2 = getAverage(row.stageScores.round3_stage2 ?? []);
+    const stage3 = getAverage(row.stageScores.round3_stage3 ?? []);
 
     const afterStage2Total =
       stage1 !== null && stage2 !== null ? stage1 + stage2 : null;
@@ -146,7 +148,7 @@ export default async function Round3ResultsPage() {
     .filter((row) => row.finalTotal !== null)
     .sort((a, b) => Number(b.finalTotal) - Number(a.finalTotal));
 
-  const stageRows = Object.fromEntries(
+  const stageRows: Record<string, ContestantSummary[]> = Object.fromEntries(
     ROUND3_SEGMENTS.map((segment) => [
       segment.id,
       [...rows]
@@ -161,7 +163,14 @@ export default async function Round3ResultsPage() {
 
   return (
     <main style={{ maxWidth: 1200, margin: "0 auto", padding: 24 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 16, alignItems: "center" }}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          gap: 16,
+          alignItems: "center",
+        }}
+      >
         <div>
           <p className="eyebrow">Speak Up DNU 2026</p>
           <h1>Tổng hợp điểm vòng 3</h1>
@@ -179,7 +188,7 @@ export default async function Round3ResultsPage() {
         <div className="card-header">
           <h3 className="card-title">Thao tác chuyển chặng</h3>
           <p className="card-subtitle">
-            Sau khi có kết quả vòng 2, bấm nút đầu để đưa Top 10 vào chặng 1 và chặng 2. Sau khi chấm xong chặng 1 + 2, bấm nút thứ hai để lấy Top 3 vào chặng 3.
+            Sau khi chấm xong vòng 2, bấm nút đầu để lấy 10 thí sinh có điểm cao nhất vòng 2 vào vòng 3 chặng 1 và chặng 2. Sau khi chấm xong chặng 1 + 2, bấm nút thứ hai để lấy Top 3 vào chặng 3.
           </p>
         </div>
 
@@ -188,7 +197,7 @@ export default async function Round3ResultsPage() {
             <input type="hidden" name="action" value="round2_to_stage12" />
             <input type="hidden" name="topN" value="10" />
             <button className="btn btn-primary" type="submit">
-              Lấy Top 10 vòng 2 vào chặng 1 + 2
+              Lấy Top 10 từ vòng 2 vào vòng 3
             </button>
           </form>
 
@@ -230,9 +239,7 @@ export default async function Round3ResultsPage() {
                   key={row.contestantId}
                   style={{
                     background:
-                      index < 3
-                        ? "rgba(22, 163, 74, 0.18)"
-                        : "transparent",
+                      index < 3 ? "rgba(22, 163, 74, 0.18)" : "transparent",
                   }}
                 >
                   <td className="strong-cell">{index + 1}</td>
@@ -240,7 +247,9 @@ export default async function Round3ResultsPage() {
                   <td>{row.fullName}</td>
                   <td>{formatScore(row.stageAverages.round3_stage1)}</td>
                   <td>{formatScore(row.stageAverages.round3_stage2)}</td>
-                  <td className="strong-cell">{formatScore(row.afterStage2Total)}</td>
+                  <td className="strong-cell">
+                    {formatScore(row.afterStage2Total)}
+                  </td>
                   <td>{index < 3 ? "Top 3 vào chặng 3" : "-"}</td>
                 </tr>
               ))}
@@ -258,7 +267,11 @@ export default async function Round3ResultsPage() {
       </section>
 
       {ROUND3_SEGMENTS.map((segment) => (
-        <section key={segment.id} className="card-surface" style={{ marginTop: 24 }}>
+        <section
+          key={segment.id}
+          className="card-surface"
+          style={{ marginTop: 24 }}
+        >
           <div className="card-header">
             <h3 className="card-title">{segment.label}</h3>
             <p className="card-subtitle">
@@ -280,14 +293,20 @@ export default async function Round3ResultsPage() {
               </thead>
 
               <tbody>
-                {(stageRows[segment.id] || []).map((row: ContestantSummary, index: number) => (
+                {(stageRows[segment.id] || []).map((row, index) => (
                   <tr key={`${segment.id}-${row.contestantId}`}>
                     <td className="strong-cell">{index + 1}</td>
                     <td className="strong-cell">{row.sbd}</td>
                     <td>{row.fullName}</td>
                     <td>{row.stageScores[segment.id]?.length ?? 0}</td>
-                    <td>{(row.stageScores[segment.id] || []).map((score) => formatScore(score)).join(" | ")}</td>
-                    <td className="strong-cell">{formatScore(row.stageAverages[segment.id])}</td>
+                    <td>
+                      {(row.stageScores[segment.id] || [])
+                        .map((score) => formatScore(score))
+                        .join(" | ")}
+                    </td>
+                    <td className="strong-cell">
+                      {formatScore(row.stageAverages[segment.id])}
+                    </td>
                   </tr>
                 ))}
 
