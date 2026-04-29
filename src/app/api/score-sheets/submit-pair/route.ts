@@ -82,12 +82,15 @@ export async function POST(req: Request) {
 
   const { data: criteria, error: criteriaError } = await adminSupabase
     .from("scoring_criteria")
-    .select("id, weight, max_score")
+    .select("id, title, weight, max_score, order_no")
     .eq("segment_id", segmentId)
     .order("order_no");
 
   if (criteriaError || !criteria?.length) {
-    return NextResponse.json({ error: criteriaError?.message || "Không tìm thấy tiêu chí chấm" }, { status: 400 });
+    return NextResponse.json(
+      { error: criteriaError?.message || "Không tìm thấy tiêu chí chấm" },
+      { status: 400 }
+    );
   }
 
   const resultByContestant: Record<string, number> = {};
@@ -128,7 +131,10 @@ export async function POST(req: Request) {
       .single();
 
     if (sheetError || !sheet) {
-      return NextResponse.json({ error: sheetError?.message || "Không lưu được phiếu chấm" }, { status: 500 });
+      return NextResponse.json(
+        { error: sheetError?.message || "Không lưu được phiếu chấm" },
+        { status: 500 }
+      );
     }
 
     const itemRows = criteria.map((criterion: any) => {
@@ -137,16 +143,24 @@ export async function POST(req: Request) {
       const safeScore = Math.min(Math.max(rawScore, 0), maxScore);
 
       return {
+        // Các cột cũ đang bắt buộc trong bảng score_items
+        score_sheet_id: sheet.id,
+        criterion_key: criterion.id,
+        criterion_group: criterion.title || segmentId,
+
+        // Các cột mới dùng cho vòng 2-3
         sheet_id: sheet.id,
         criterion_id: criterion.id,
+
         score: safeScore,
+        updated_at: new Date().toISOString(),
       };
     });
 
     const { error: itemError } = await adminSupabase
       .from("score_items")
       .upsert(itemRows, {
-        onConflict: "sheet_id,criterion_id",
+        onConflict: "score_sheet_id,criterion_key",
       });
 
     if (itemError) {
