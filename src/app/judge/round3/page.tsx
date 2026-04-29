@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { CompleteRoundButton } from "@/components/judge/complete-round-button";
 
 const ROUND3_STAGES = [
   {
@@ -449,6 +450,8 @@ export default function JudgeRound3Page() {
           </>
         )}
       </section>
+
+      <CompleteRoundButton roundKey="round3" label="Kết thúc chấm vòng 3" />
 
       {message && <p style={{ marginTop: 16, fontWeight: 700 }}>{message}</p>}
     </main>
