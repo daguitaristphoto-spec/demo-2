@@ -44,6 +44,15 @@ type Round2Pair = {
   }[];
 };
 
+function getCriterionLabel(criterion: Criterion) {
+  return criterion.description || criterion.title;
+}
+
+function getCriterionMeta(criterion: Criterion) {
+  const groupTitle = criterion.description ? `${criterion.title} · ` : "";
+  return `${groupTitle}Trọng số: ${Number(criterion.weight) * 100}% · Tối đa: ${criterion.max_score}`;
+}
+
 export default function JudgeLiveScoringPage() {
   const [segments, setSegments] = useState<Segment[]>([]);
   const [segmentId, setSegmentId] = useState("");
@@ -526,12 +535,9 @@ export default function JudgeLiveScoringPage() {
                   }}
                 >
                   <div>
-                    <strong>{criterion.title}</strong>
+                    <strong>{getCriterionLabel(criterion)}</strong>
                     <br />
-                    <small>
-                      Trọng số: {Number(criterion.weight) * 100}% · Tối đa:{" "}
-                      {criterion.max_score}
-                    </small>
+                    <small>{getCriterionMeta(criterion)}</small>
                   </div>
 
                   {selectedPair.members.map((member) => (
@@ -651,12 +657,9 @@ export default function JudgeLiveScoringPage() {
                   }}
                 >
                   <span>
-                    <strong>{criterion.title}</strong>
+                    <strong>{getCriterionLabel(criterion)}</strong>
                     <br />
-                    <small>
-                      Trọng số: {Number(criterion.weight) * 100}% · Tối đa:{" "}
-                      {criterion.max_score}
-                    </small>
+                    <small>{getCriterionMeta(criterion)}</small>
                   </span>
 
                   <input
