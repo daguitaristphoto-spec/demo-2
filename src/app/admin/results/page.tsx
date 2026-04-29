@@ -72,7 +72,7 @@ export default async function AdminResultsPage() {
           <div className="eyebrow">Vòng 2</div>
           <h3 className="card-title">Tổng hợp điểm vòng 2</h3>
           <p className="card-subtitle">
-            Xem bảng xếp hạng vòng 2, điểm từng giám khảo và điểm trung bình của từng thí sinh.
+            Xem bảng xếp hạng vòng 2 và điểm trung bình của từng thí sinh theo số phiếu giám khảo đã nộp.
           </p>
         </Link>
 
@@ -90,7 +90,7 @@ export default async function AdminResultsPage() {
           <div className="eyebrow">PDF</div>
           <h3 className="card-title">Xuất phiếu PDF vòng 2</h3>
           <p className="card-subtitle">
-            Mở trang in toàn bộ phiếu chấm vòng 2 theo từng thí sinh, đúng tiêu chí chi tiết của vòng Bán kết - Vượt ải.
+            Mở trang in toàn bộ phiếu chấm vòng 2 theo từng thí sinh, đầy đủ phiếu của từng giám khảo.
           </p>
         </Link>
 
@@ -107,7 +107,7 @@ export default async function AdminResultsPage() {
           <div className="eyebrow">Vòng 3</div>
           <h3 className="card-title">Tổng hợp điểm vòng 3</h3>
           <p className="card-subtitle">
-            Xem điểm từng chặng, lấy Top 3 sau chặng 1 + 2 và xếp hạng chung cuộc sau chặng 3.
+            Xem điểm trung bình từng chặng, lấy Top 3 sau chặng 1 + 2 và xếp hạng chung cuộc sau chặng 3.
           </p>
         </Link>
 
@@ -125,7 +125,24 @@ export default async function AdminResultsPage() {
           <div className="eyebrow">PDF</div>
           <h3 className="card-title">Xuất phiếu PDF vòng 3</h3>
           <p className="card-subtitle">
-            Mở trang in toàn bộ phiếu chấm vòng 3 theo từng chặng chung kết.
+            Mở trang in toàn bộ phiếu chấm vòng 3 theo từng chặng chung kết, đầy đủ phiếu của từng giám khảo.
+          </p>
+        </Link>
+
+        <Link
+          href="/admin/tie-breaks"
+          className="card-surface"
+          style={{
+            display: 'block',
+            textDecoration: 'none',
+            color: 'inherit',
+            padding: 20,
+          }}
+        >
+          <div className="eyebrow">Vote</div>
+          <h3 className="card-title">Quản lý vote đồng điểm</h3>
+          <p className="card-subtitle">
+            Theo dõi và chốt kết quả vote khi có thí sinh đồng điểm ở ngưỡng vào vòng tiếp theo.
           </p>
         </Link>
       </section>
