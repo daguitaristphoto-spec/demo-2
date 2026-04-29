@@ -201,7 +201,7 @@ export default async function Round1ScoreSheetsPrintPage() {
                 <br />
                 <br />
                 <br />
-                <span>(ghi rõ Họ và tên)</span>
+      
               </div>
 
               <div>
@@ -209,7 +209,7 @@ export default async function Round1ScoreSheetsPrintPage() {
                 <br />
                 <br />
                 <br />
-                <span>(ghi rõ Họ và tên)</span>
+                
               </div>
             </section>
 
