@@ -187,7 +187,16 @@ export default async function Round3ScoreSheetsPrintPage() {
 
       {sheetRows.length === 0 ? (
         <section className="empty-state">
-          <h1>Chưa có phiếu chấm vòng 3 nào được nộp chính thức.</h1>
+          <div className="empty-state-icon">📄</div>
+          <h1>Chưa có phiếu chấm vòng 3</h1>
+          <p>
+            Hiện chưa có phiếu chấm vòng 3 nào được nộp chính thức. Sau khi giám khảo
+            nộp điểm các chặng chung kết, hệ thống sẽ tự hiển thị danh sách phiếu
+            để in hoặc lưu PDF.
+          </p>
+          <Link href="/admin/results" className="empty-state-link">
+            Quay lại trang kết quả
+          </Link>
         </section>
       ) : null}
 
@@ -348,6 +357,7 @@ export default async function Round3ScoreSheetsPrintPage() {
         .print-root {
           background: #f3f4f6;
           padding: 24px;
+          min-height: 100vh;
         }
 
         .print-toolbar {
@@ -506,10 +516,56 @@ export default async function Round3ScoreSheetsPrintPage() {
 
         .empty-state {
           max-width: 900px;
-          margin: 0 auto;
-          background: white;
-          padding: 24px;
-          border-radius: 12px;
+          margin: 40px auto;
+          background: #ffffff;
+          color: #111827;
+          padding: 36px 32px;
+          border-radius: 18px;
+          border: 1px solid #e5e7eb;
+          box-shadow: 0 12px 30px rgba(15, 23, 42, 0.12);
+          text-align: center;
+          font-family: Arial, sans-serif;
+        }
+
+        .empty-state-icon {
+          width: 56px;
+          height: 56px;
+          margin: 0 auto 16px auto;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 999px;
+          background: #fff7ed;
+          border: 1px solid #fed7aa;
+          font-size: 28px;
+        }
+
+        .empty-state h1 {
+          margin: 0;
+          color: #111827;
+          font-size: 24px;
+          font-weight: 800;
+          line-height: 1.3;
+        }
+
+        .empty-state p {
+          max-width: 640px;
+          margin: 12px auto 0 auto;
+          color: #4b5563;
+          font-size: 15px;
+          line-height: 1.6;
+        }
+
+        .empty-state-link {
+          display: inline-flex;
+          margin-top: 22px;
+          padding: 10px 16px;
+          border-radius: 999px;
+          background: #f59e0b;
+          color: #111827;
+          text-decoration: none;
+          font-weight: 700;
+          border: 1px solid #d97706;
         }
 
         @media print {
@@ -526,6 +582,7 @@ export default async function Round3ScoreSheetsPrintPage() {
           .print-root {
             padding: 0;
             background: white;
+            min-height: auto;
           }
 
           .print-toolbar {
@@ -556,6 +613,23 @@ export default async function Round3ScoreSheetsPrintPage() {
 
           .sheet-footer {
             display: none;
+          }
+
+          .empty-state {
+            box-shadow: none;
+            border: 1px solid #000000;
+            color: #000000;
+            margin: 20mm auto;
+          }
+
+          .empty-state h1,
+          .empty-state p {
+            color: #000000 !important;
+          }
+
+          .empty-state-link,
+          .empty-state-icon {
+            display: none !important;
           }
         }
       `}</style>
