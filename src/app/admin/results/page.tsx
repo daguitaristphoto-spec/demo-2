@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { requireRole } from '@/lib/auth-guard';
 
 export default async function AdminResultsPage() {
-  const { profile } = await requireRole('admin');
+  await requireRole('admin');
 
   return (
     <main style={{ maxWidth: 1100, margin: '0 auto', padding: 24 }}>
@@ -56,6 +56,24 @@ export default async function AdminResultsPage() {
           </p>
         </Link>
 
+        <Link
+          href="/admin/round2-score-sheets/print"
+          target="_blank"
+          className="card-surface"
+          style={{
+            display: 'block',
+            textDecoration: 'none',
+            color: 'inherit',
+            padding: 20,
+          }}
+        >
+          <div className="eyebrow">PDF</div>
+          <h3 className="card-title">Xuất phiếu PDF vòng 2</h3>
+          <p className="card-subtitle">
+            Mở trang in toàn bộ phiếu chấm vòng 2 theo từng thí sinh, đúng tiêu chí chi tiết của vòng Bán kết - Vượt ải.
+          </p>
+        </Link>
+
         <div
           className="card-surface"
           style={{
@@ -66,7 +84,7 @@ export default async function AdminResultsPage() {
           <div className="eyebrow">Vòng 2</div>
           <h3 className="card-title">Tổng hợp điểm vòng 2</h3>
           <p className="card-subtitle">
-            Sẽ bổ sung sau khi hoàn thiện luồng chấm trực tiếp vòng 2.
+            Sẽ bổ sung bảng xếp hạng vòng 2 sau khi hoàn thiện chức năng tổng hợp điểm.
           </p>
         </div>
 
