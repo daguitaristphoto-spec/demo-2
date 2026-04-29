@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { CompleteRoundButton } from "@/components/judge/complete-round-button";
 
 const SEGMENT_ID = "round2_semifinal";
 
@@ -415,6 +416,8 @@ export default function JudgeRound2Page() {
           </button>
         </section>
       ) : null}
+
+      <CompleteRoundButton roundKey="round2" label="Kết thúc chấm vòng 2" />
 
       {message && <p style={{ marginTop: 16, fontWeight: 700 }}>{message}</p>}
     </main>
