@@ -74,19 +74,22 @@ export default async function AdminResultsPage() {
           </p>
         </Link>
 
-        <div
+        <Link
+          href="/admin/round2-results"
           className="card-surface"
           style={{
+            display: 'block',
+            textDecoration: 'none',
+            color: 'inherit',
             padding: 20,
-            opacity: 0.55,
           }}
         >
           <div className="eyebrow">Vòng 2</div>
           <h3 className="card-title">Tổng hợp điểm vòng 2</h3>
           <p className="card-subtitle">
-            Sẽ bổ sung bảng xếp hạng vòng 2 sau khi hoàn thiện chức năng tổng hợp điểm.
+            Xem bảng xếp hạng vòng 2, điểm từng giám khảo và điểm trung bình của từng thí sinh.
           </p>
-        </div>
+        </Link>
 
         <div
           className="card-surface"
