@@ -22,7 +22,9 @@ function groupCriteria(criteria: any[]) {
 
   for (const criterion of criteria) {
     const existingGroup = groups.find(
-      (group) => group.title === criterion.title && Number(group.weight) === Number(criterion.weight)
+      (group) =>
+        group.title === criterion.title &&
+        Number(group.weight) === Number(criterion.weight)
     );
 
     if (existingGroup) {
@@ -164,7 +166,8 @@ export default async function Round2ScoreSheetsPrintPage() {
               <h3>I. THÔNG TIN CHUNG</h3>
               <div className="info-grid">
                 <div>
-                  <strong>Họ và tên thí sinh:</strong> {contestant?.full_name ?? "........................"}
+                  <strong>Họ và tên thí sinh:</strong>{" "}
+                  {contestant?.full_name ?? "........................"}
                 </div>
                 <div>
                   <strong>SBD:</strong> {contestant?.sbd ?? "................"}
@@ -173,13 +176,15 @@ export default async function Round2ScoreSheetsPrintPage() {
                   <strong>Vòng thi:</strong> Vòng 2 - Bán kết
                 </div>
                 <div>
-                  <strong>Cặp thi:</strong> {pair?.pair_no ? `Cặp ${pair.pair_no}` : "................"}
+                  <strong>Cặp thi:</strong>{" "}
+                  {pair?.pair_no ? `Cặp ${pair.pair_no}` : "................"}
                 </div>
                 <div>
                   <strong>Chặng thi:</strong> Vượt ải
                 </div>
                 <div>
-                  <strong>Giám khảo:</strong> {judge?.full_name ?? "........................"}
+                  <strong>Giám khảo:</strong>{" "}
+                  {judge?.full_name ?? "........................"}
                 </div>
               </div>
             </section>
@@ -188,6 +193,15 @@ export default async function Round2ScoreSheetsPrintPage() {
               <h3>II. TIÊU CHÍ CHẤM THI</h3>
 
               <table className="print-table">
+                <colgroup>
+                  <col style={{ width: "6%" }} />
+                  <col style={{ width: "26%" }} />
+                  <col style={{ width: "32%" }} />
+                  <col style={{ width: "10%" }} />
+                  <col style={{ width: "10%" }} />
+                  <col style={{ width: "16%" }} />
+                </colgroup>
+
                 <thead>
                   <tr>
                     <th>STT</th>
@@ -203,32 +217,44 @@ export default async function Round2ScoreSheetsPrintPage() {
                   {criteriaGroups.map((group, groupIndex) =>
                     group.items.map((criterion, itemIndex) => (
                       <tr key={criterion.id}>
-                        {itemIndex === 0 ? <td rowSpan={group.items.length}>{groupIndex + 1}</td> : null}
+                        {itemIndex === 0 ? (
+                          <td className="stt-cell" rowSpan={group.items.length}>
+                            {groupIndex + 1}
+                          </td>
+                        ) : null}
 
                         {itemIndex === 0 ? (
-                          <td rowSpan={group.items.length}>
+                          <td className="group-title-cell" rowSpan={group.items.length}>
                             <strong>{group.title}</strong>
                           </td>
                         ) : null}
 
-                        <td>{criterion.description || criterion.title}</td>
-                        <td>{criterion.max_score}</td>
+                        <td className="description-cell">
+                          {criterion.description || criterion.title}
+                        </td>
+
+                        <td className="max-score-cell">{criterion.max_score}</td>
 
                         {itemIndex === 0 ? (
-                          <td rowSpan={group.items.length}>{Math.round(Number(group.weight) * 100)}%</td>
+                          <td className="weight-cell" rowSpan={group.items.length}>
+                            {Math.round(Number(group.weight) * 100)}%
+                          </td>
                         ) : null}
 
-                        <td>{formatScore(itemMap.get(criterion.id))}</td>
+                        <td className="score-cell">
+                          {formatScore(itemMap.get(criterion.id))}
+                        </td>
                       </tr>
                     ))
                   )}
 
-                  <tr>
+                  <tr className="total-row">
                     <td colSpan={5}>
                       <strong>TỔNG ĐIỂM</strong>
                     </td>
-                    <td>
-                      <strong>{formatScore(sheet.total_score)} / 100</strong>
+                    <td className="total-score-cell">
+                      <strong>{formatScore(sheet.total_score)}</strong>
+                      <span>/100</span>
                     </td>
                   </tr>
                 </tbody>
@@ -327,13 +353,15 @@ export default async function Round2ScoreSheetsPrintPage() {
           width: 100%;
           border-collapse: collapse;
           margin-top: 8px;
+          table-layout: fixed;
         }
 
         .print-table th,
         .print-table td {
           border: 1px solid #111827;
-          padding: 6px;
+          padding: 5px 6px;
           vertical-align: middle;
+          line-height: 1.25;
         }
 
         .print-table th {
@@ -341,11 +369,57 @@ export default async function Round2ScoreSheetsPrintPage() {
           font-weight: 700;
         }
 
-        .print-table td:nth-child(1),
-        .print-table td:nth-child(4),
-        .print-table td:nth-child(5),
-        .print-table td:nth-child(6) {
+        .stt-cell {
           text-align: center;
+          vertical-align: middle;
+        }
+
+        .group-title-cell {
+          text-align: left;
+          vertical-align: middle;
+          line-height: 1.25;
+        }
+
+        .description-cell {
+          text-align: left;
+          vertical-align: middle;
+          line-height: 1.25;
+        }
+
+        .max-score-cell,
+        .weight-cell,
+        .score-cell {
+          text-align: center;
+          vertical-align: middle;
+          white-space: nowrap;
+          font-variant-numeric: tabular-nums;
+        }
+
+        .score-cell {
+          font-weight: 600;
+        }
+
+        .total-row td {
+          text-align: center;
+          vertical-align: middle;
+        }
+
+        .total-score-cell {
+          text-align: center;
+          vertical-align: middle;
+          white-space: nowrap;
+          line-height: 1.1;
+        }
+
+        .total-score-cell strong {
+          display: block;
+          font-size: 13px;
+        }
+
+        .total-score-cell span {
+          display: block;
+          font-size: 11px;
+          margin-top: 2px;
         }
 
         .signature-section {
