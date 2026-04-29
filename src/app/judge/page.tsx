@@ -31,10 +31,12 @@ export default async function JudgeDashboardPage() {
       .select('contestant_id, can_edit, contestant:contestants(id, sbd, full_name, video_path)')
       .eq('judge_id', user.id)
       .order('created_at'),
+
     supabase
       .from('score_sheets')
-      .select('contestant_id, status, total_score')
-      .eq('judge_id', user.id),
+      .select('contestant_id, status, total_score, segment_id')
+      .eq('judge_id', user.id)
+      .or('segment_id.eq.round1_online,segment_id.is.null'),
   ]);
 
   const sheetMap = new Map((sheets ?? []).map((sheet) => [sheet.contestant_id, sheet]));
@@ -52,7 +54,7 @@ export default async function JudgeDashboardPage() {
       roleLabel="Giám khảo"
       userName={profile.full_name}
       title={`Xin chào, ${profile.full_name}`}
-      subtitle="Đây là trang chủ của giám khảo. Bạn có thể chấm vòng 1 theo danh sách được phân công, hoặc vào khu vực chấm trực tiếp vòng 2-3."
+      subtitle="Đây là trang chủ của giám khảo. Bạn có thể chấm vòng 1 theo danh sách được phân công, hoặc vào khu vực chấm vòng 2 và vòng 3."
       navItems={JUDGE_NAV}
       activeHref="/judge"
     >
@@ -60,7 +62,7 @@ export default async function JudgeDashboardPage() {
         <div className="card-header">
           <h3 className="card-title">Khu vực chấm điểm</h3>
           <p className="card-subtitle">
-            Vòng 1 sử dụng danh sách thí sinh được phân công. Vòng 2 và vòng 3 sử dụng giao diện chấm trực tiếp.
+            Vòng 1 sử dụng danh sách thí sinh được phân công. Vòng 2 và vòng 3 sử dụng giao diện chấm riêng.
           </p>
         </div>
 
@@ -70,12 +72,14 @@ export default async function JudgeDashboardPage() {
           </Link>
 
           <Link href="/judge/round2" className="btn btn-secondary">
-  Chấm vòng 2
-</Link>
+            Chấm vòng 2
+          </Link>
 
-<Link href="/judge/round3" className="btn btn-secondary">
-  Chấm vòng 3
-</Link>
+          <Link href="/judge/round3" className="btn btn-secondary">
+            Chấm vòng 3
+          </Link>
+        </div>
+      </section>
 
       <section className="stats-grid">
         <StatCard
