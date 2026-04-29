@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Fragment } from "react";
 import { requireRole } from "@/lib/auth-guard";
 import { PrintButton } from "@/components/admin/print-button";
 
@@ -16,29 +17,29 @@ function formatScore(value: any) {
 function groupCriteria(criteria: any[]) {
   const groups: {
     title: string;
-    weight: number;
     items: any[];
   }[] = [];
 
   for (const criterion of criteria) {
-    const existingGroup = groups.find(
-      (group) =>
-        group.title === criterion.title &&
-        Number(group.weight) === Number(criterion.weight)
-    );
+    const existingGroup = groups.find((group) => group.title === criterion.title);
 
     if (existingGroup) {
       existingGroup.items.push(criterion);
     } else {
       groups.push({
         title: criterion.title,
-        weight: Number(criterion.weight),
         items: [criterion],
       });
     }
   }
 
   return groups;
+}
+
+function getGroupMax(group: any) {
+  return group.items.reduce((sum: number, item: any) => {
+    return sum + Number(item.max_score ?? 0);
+  }, 0);
 }
 
 export default async function Round2ScoreSheetsPrintPage() {
@@ -164,24 +165,30 @@ export default async function Round2ScoreSheetsPrintPage() {
 
             <section className="info-section">
               <h3>I. THÔNG TIN CHUNG</h3>
+
               <div className="info-grid">
                 <div>
                   <strong>Họ và tên thí sinh:</strong>{" "}
                   {contestant?.full_name ?? "........................"}
                 </div>
+
                 <div>
                   <strong>SBD:</strong> {contestant?.sbd ?? "................"}
                 </div>
+
                 <div>
                   <strong>Vòng thi:</strong> Vòng 2 - Bán kết
                 </div>
+
                 <div>
                   <strong>Cặp thi:</strong>{" "}
                   {pair?.pair_no ? `Cặp ${pair.pair_no}` : "................"}
                 </div>
+
                 <div>
                   <strong>Chặng thi:</strong> Vượt ải
                 </div>
+
                 <div>
                   <strong>Giám khảo:</strong>{" "}
                   {judge?.full_name ?? "........................"}
@@ -194,64 +201,64 @@ export default async function Round2ScoreSheetsPrintPage() {
 
               <table className="print-table">
                 <colgroup>
-                  <col style={{ width: "6%" }} />
-                  <col style={{ width: "26%" }} />
-                  <col style={{ width: "32%" }} />
-                  <col style={{ width: "10%" }} />
-                  <col style={{ width: "10%" }} />
-                  <col style={{ width: "16%" }} />
+                  <col style={{ width: "7%" }} />
+                  <col style={{ width: "52%" }} />
+                  <col style={{ width: "21%" }} />
+                  <col style={{ width: "20%" }} />
                 </colgroup>
 
                 <thead>
                   <tr>
                     <th>STT</th>
-                    <th>Tiêu chí đánh giá</th>
-                    <th>Mô tả chi tiết</th>
-                    <th>Thang điểm</th>
-                    <th>Trọng số</th>
-                    <th>Điểm BGK</th>
+                    <th>TIÊU CHÍ ĐÁNH GIÁ</th>
+                    <th>
+                      THANG ĐIỂM
+                      <br />
+                      <span>(Điểm tối đa 100 điểm)</span>
+                    </th>
+                    <th>ĐIỂM BGK</th>
                   </tr>
                 </thead>
 
                 <tbody>
-                  {criteriaGroups.map((group, groupIndex) =>
-                    group.items.map((criterion, itemIndex) => (
-                      <tr key={criterion.id}>
-                        {itemIndex === 0 ? (
-                          <td className="stt-cell" rowSpan={group.items.length}>
+                  {criteriaGroups.map((group, groupIndex) => {
+                    const groupMax = getGroupMax(group);
+
+                    return (
+                      <Fragment key={group.title}>
+                        <tr className="group-row">
+                          <td className="stt-cell" rowSpan={group.items.length + 1}>
                             {groupIndex + 1}
                           </td>
-                        ) : null}
-
-                        {itemIndex === 0 ? (
-                          <td className="group-title-cell" rowSpan={group.items.length}>
+                          <td className="group-title-cell">
                             <strong>{group.title}</strong>
                           </td>
-                        ) : null}
-
-                        <td className="description-cell">
-                          {criterion.description || criterion.title}
-                        </td>
-
-                        <td className="max-score-cell">{criterion.max_score}</td>
-
-                        {itemIndex === 0 ? (
-                          <td className="weight-cell" rowSpan={group.items.length}>
-                            {Math.round(Number(group.weight) * 100)}%
+                          <td className="max-score-cell">
+                            <strong>{groupMax}</strong>
                           </td>
-                        ) : null}
+                          <td className="score-cell"></td>
+                        </tr>
 
-                        <td className="score-cell">
-                          {formatScore(itemMap.get(criterion.id))}
-                        </td>
-                      </tr>
-                    ))
-                  )}
+                        {group.items.map((criterion: any) => (
+                          <tr key={criterion.id} className="detail-row">
+                            <td className="description-cell">
+                              {criterion.description || criterion.title}
+                            </td>
+                            <td className="max-score-cell">...../{criterion.max_score}</td>
+                            <td className="score-cell">
+                              {formatScore(itemMap.get(criterion.id))}
+                            </td>
+                          </tr>
+                        ))}
+                      </Fragment>
+                    );
+                  })}
 
                   <tr className="total-row">
-                    <td colSpan={5}>
+                    <td colSpan={3}>
                       <strong>TỔNG ĐIỂM</strong>
                     </td>
+
                     <td className="total-score-cell">
                       <strong>{formatScore(sheet.total_score)}</strong>
                       <span>/100</span>
@@ -262,20 +269,20 @@ export default async function Round2ScoreSheetsPrintPage() {
             </section>
 
             <section className="signature-section">
-  <div>
-    <strong>THƯ KÝ</strong>
-    <br />
-    <br />
-    <br />
-  </div>
+              <div>
+                <strong>THƯ KÝ</strong>
+                <br />
+                <br />
+                <br />
+              </div>
 
-  <div>
-    <strong>GIÁM KHẢO</strong>
-    <br />
-    <br />
-    <br />
-  </div>
-</section>
+              <div>
+                <strong>GIÁM KHẢO</strong>
+                <br />
+                <br />
+                <br />
+              </div>
+            </section>
 
             <div className="sheet-footer">
               Phiếu {index + 1} / {sheetRows.length}
@@ -304,7 +311,7 @@ export default async function Round2ScoreSheetsPrintPage() {
           margin: 0 auto 24px auto;
           padding: 16mm;
           background: white;
-          color: #111827;
+          color: #000000;
           box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
           page-break-after: always;
           font-family: "Times New Roman", Times, serif;
@@ -316,56 +323,62 @@ export default async function Round2ScoreSheetsPrintPage() {
           grid-template-columns: 1fr 1.2fr;
           gap: 24px;
           text-align: center;
-          line-height: 1.5;
+          line-height: 1.35;
+          font-size: 13px;
         }
 
         .sheet-title {
           margin-top: 28px;
-          margin-bottom: 4px;
+          margin-bottom: 3px;
           text-align: center;
-          font-size: 20px;
+          font-size: 18px;
           font-weight: 700;
         }
 
         .sheet-subtitle {
           margin-top: 0;
-          margin-bottom: 22px;
+          margin-bottom: 18px;
           text-align: center;
-          font-size: 16px;
+          font-size: 14px;
           font-weight: 700;
         }
 
         .info-section h3,
         .criteria-section h3 {
-          margin-top: 16px;
-          margin-bottom: 10px;
-          font-size: 15px;
+          margin-top: 12px;
+          margin-bottom: 8px;
+          font-size: 14px;
         }
 
         .info-grid {
           display: grid;
           grid-template-columns: 1fr 1fr;
-          gap: 8px 24px;
-          line-height: 1.6;
+          gap: 6px 24px;
+          line-height: 1.45;
         }
 
         .print-table {
           width: 100%;
           border-collapse: collapse;
-          margin-top: 8px;
+          margin-top: 10px;
           table-layout: fixed;
         }
 
         .print-table th,
         .print-table td {
-          border: 1px solid #111827;
-          padding: 5px 6px;
+          border: 1px solid #000000;
+          padding: 4px 5px;
           vertical-align: middle;
-          line-height: 1.25;
+          line-height: 1.22;
         }
 
         .print-table th {
           text-align: center;
+          font-weight: 700;
+        }
+
+        .print-table th span {
+          font-size: 11px;
           font-weight: 700;
         }
 
@@ -375,24 +388,32 @@ export default async function Round2ScoreSheetsPrintPage() {
         }
 
         .group-title-cell {
-          text-align: left;
+          text-align: center;
+          font-weight: 700;
           vertical-align: middle;
-          line-height: 1.25;
         }
 
         .description-cell {
           text-align: left;
           vertical-align: middle;
-          line-height: 1.25;
         }
 
         .max-score-cell,
-        .weight-cell,
-        .score-cell {
+        .score-cell,
+        .total-score-cell {
           text-align: center;
           vertical-align: middle;
           white-space: nowrap;
           font-variant-numeric: tabular-nums;
+        }
+
+        .group-row td {
+          font-weight: 700;
+          text-align: center;
+        }
+
+        .detail-row td {
+          font-weight: 400;
         }
 
         .score-cell {
@@ -401,13 +422,10 @@ export default async function Round2ScoreSheetsPrintPage() {
 
         .total-row td {
           text-align: center;
-          vertical-align: middle;
+          font-weight: 700;
         }
 
         .total-score-cell {
-          text-align: center;
-          vertical-align: middle;
-          white-space: nowrap;
           line-height: 1.1;
         }
 
@@ -434,7 +452,7 @@ export default async function Round2ScoreSheetsPrintPage() {
           margin-top: 24px;
           text-align: right;
           font-size: 12px;
-          color: #6b7280;
+          color: #000000;
         }
 
         .empty-state {
@@ -446,6 +464,12 @@ export default async function Round2ScoreSheetsPrintPage() {
         }
 
         @media print {
+          html,
+          body {
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+
           body {
             background: white !important;
           }
@@ -459,6 +483,14 @@ export default async function Round2ScoreSheetsPrintPage() {
             display: none !important;
           }
 
+          .score-sheet-page,
+          .score-sheet-page * {
+            color: #000000 !important;
+            opacity: 1 !important;
+            text-shadow: none !important;
+            filter: none !important;
+          }
+
           .score-sheet-page {
             width: auto;
             min-height: auto;
@@ -466,6 +498,11 @@ export default async function Round2ScoreSheetsPrintPage() {
             padding: 11mm;
             box-shadow: none;
             page-break-after: always;
+          }
+
+          .print-table th,
+          .print-table td {
+            border-color: #000000 !important;
           }
 
           .sheet-footer {
