@@ -31,8 +31,6 @@ export default async function Round1ScoreSheetsPrintPage() {
       judge_id,
       status,
       total_score,
-      strengths,
-      weaknesses,
       contestant:contestants(id, sbd, full_name),
       judge:profiles(id, full_name, email)
     `)
@@ -183,37 +181,25 @@ export default async function Round1ScoreSheetsPrintPage() {
               </table>
             </section>
 
-            <section className="comment-section">
-              <h3>III. NHẬN XÉT CỦA BAN GIÁM KHẢO</h3>
-
-              <p>
-                <strong>Ưu điểm:</strong> {sheet.strengths || '........................................................................................'}
-              </p>
-
-              <p>
-                <strong>Hạn chế:</strong> {sheet.weaknesses || '........................................................................................'}
-              </p>
-            </section>
-
             <section className="signature-section">
               <div>
-                <strong>THƯ KÝ</strong>
+                <strong>Chữ ký Thư ký</strong>
                 <br />
                 <br />
                 <br />
-      
               </div>
 
               <div>
-                <strong>GÍAM KHẢO</strong>
+                <strong>Chữ ký Ban Giám khảo</strong>
                 <br />
                 <br />
                 <br />
-                
               </div>
             </section>
 
-            <div className="sheet-footer">Phiếu {index + 1} / {sheetRows.length}</div>
+            <div className="sheet-footer">
+              Phiếu {index + 1} / {sheetRows.length}
+            </div>
           </section>
         );
       })}
@@ -270,8 +256,7 @@ export default async function Round1ScoreSheetsPrintPage() {
         }
 
         .info-section h3,
-        .criteria-section h3,
-        .comment-section h3 {
+        .criteria-section h3 {
           margin-top: 18px;
           margin-bottom: 10px;
           font-size: 15px;
@@ -309,13 +294,8 @@ export default async function Round1ScoreSheetsPrintPage() {
           text-align: center;
         }
 
-        .comment-section p {
-          min-height: 42px;
-          line-height: 1.5;
-        }
-
         .signature-section {
-          margin-top: 36px;
+          margin-top: 48px;
           display: grid;
           grid-template-columns: 1fr 1fr;
           gap: 60px;
