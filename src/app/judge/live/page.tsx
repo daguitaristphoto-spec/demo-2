@@ -50,7 +50,7 @@ function getCriterionLabel(criterion: Criterion) {
 
 function getCriterionMeta(criterion: Criterion) {
   const groupTitle = criterion.description ? `${criterion.title} · ` : "";
-  return `${groupTitle}Trọng số: ${Number(criterion.weight) * 100}% · Tối đa: ${criterion.max_score}`;
+  return `${groupTitle}Tối đa: ${criterion.max_score}`;
 }
 
 export default function JudgeLiveScoringPage() {
