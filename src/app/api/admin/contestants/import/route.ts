@@ -4,13 +4,19 @@ import type { ContestantImportRow } from '@/lib/import-contestants';
 
 export async function POST(request: Request) {
   const supabase = await createClient();
+
   const { data: authData } = await supabase.auth.getUser();
 
   if (!authData.user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const { data: profile } = await supabase.from('profiles').select('role').eq('id', authData.user.id).single();
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', authData.user.id)
+    .single();
+
   if (profile?.role !== 'admin') {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
@@ -26,6 +32,7 @@ export async function POST(request: Request) {
     .map((row) => ({
       sbd: String(row.sbd ?? '').trim(),
       full_name: String(row.full_name ?? '').trim(),
+      video_path: row.video_path?.trim() || undefined,
       profile_text: row.profile_text?.trim() || undefined,
       portrait_url: row.portrait_url?.trim() || undefined,
     }))
@@ -36,6 +43,7 @@ export async function POST(request: Request) {
   }
 
   const sbds = sanitizedRows.map((row) => row.sbd);
+
   const { data: existingContestants, error: existingError } = await supabase
     .from('contestants')
     .select('sbd')
@@ -46,9 +54,11 @@ export async function POST(request: Request) {
   }
 
   const existingSet = new Set((existingContestants ?? []).map((item) => item.sbd));
+
   const importRows = sanitizedRows.map((row) => ({
     sbd: row.sbd,
     full_name: row.full_name,
+    ...(row.video_path ? { video_path: row.video_path } : {}),
     ...(row.profile_text ? { profile_text: row.profile_text } : {}),
     ...(row.portrait_url ? { portrait_url: row.portrait_url } : {}),
   }));
