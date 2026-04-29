@@ -20,6 +20,11 @@ const JUDGE_NAV = [
     label: 'Chấm vòng 3',
     description: 'Chấm liên thông các chặng chung kết.',
   },
+  {
+    href: '/judge/tie-breaks',
+    label: 'Vote đồng điểm',
+    description: 'Vote chọn thí sinh đi tiếp khi có đồng điểm ở ngưỡng loại.',
+  },
 ];
 
 export default async function JudgeDashboardPage() {
@@ -54,7 +59,7 @@ export default async function JudgeDashboardPage() {
       roleLabel="Giám khảo"
       userName={profile.full_name}
       title={`Xin chào, ${profile.full_name}`}
-      subtitle="Đây là trang chủ của giám khảo. Bạn có thể chấm vòng 1 theo danh sách được phân công, hoặc vào khu vực chấm vòng 2 và vòng 3."
+      subtitle="Đây là trang chủ của giám khảo. Bạn có thể chấm vòng 1 theo danh sách được phân công, hoặc vào khu vực chấm vòng 2, vòng 3 và vote đồng điểm khi có yêu cầu."
       navItems={JUDGE_NAV}
       activeHref="/judge"
     >
@@ -63,6 +68,7 @@ export default async function JudgeDashboardPage() {
           <h3 className="card-title">Khu vực chấm điểm</h3>
           <p className="card-subtitle">
             Vòng 1 sử dụng danh sách thí sinh được phân công. Vòng 2 và vòng 3 sử dụng giao diện chấm riêng.
+            Khi có thí sinh đồng điểm ở ngưỡng vào vòng tiếp theo, giám khảo vào mục Vote đồng điểm để bình chọn.
           </p>
         </div>
 
@@ -77,6 +83,10 @@ export default async function JudgeDashboardPage() {
 
           <Link href="/judge/round3" className="btn btn-secondary">
             Chấm vòng 3
+          </Link>
+
+          <Link href="/judge/tie-breaks" className="btn btn-secondary">
+            Vote đồng điểm
           </Link>
         </div>
       </section>
