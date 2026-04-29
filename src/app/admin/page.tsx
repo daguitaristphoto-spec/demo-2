@@ -7,10 +7,9 @@ const ADMIN_NAV = [
   { href: '/admin', label: 'Tổng quan', description: 'Theo dõi tiến độ và các bước vận hành.' },
   { href: '/admin/import', label: 'Import thí sinh', description: 'Đưa danh sách từ Excel vào hệ thống.' },
   { href: '/admin/assignments', label: 'Phân công vòng 1', description: 'Gán giám khảo chấm thí sinh ở vòng 1.' },
-    { href: '/admin/round2-pairs', label: 'Gán cặp vòng 2', description: 'Ghép 30 thí sinh điểm cao nhất thành từng cặp.' },
+  { href: '/admin/round2-pairs', label: 'Gán cặp vòng 2', description: 'Ghép 30 thí sinh điểm cao nhất thành từng cặp.' },
   { href: '/admin/judge-assignments', label: 'Phân công vòng 2-3', description: 'Gán giám khảo chấm vòng 2 và vòng 3.' },
   { href: '/admin/results', label: 'Kết quả', description: 'Tổng hợp điểm, xếp hạng và xuất phiếu chấm điểm.' },
-  { href: '/admin/upload', label: 'Upload video', description: 'Lưu video dự thi để giám khảo xem trực tiếp.' },
 ];
 
 export default async function AdminDashboardPage() {
@@ -46,10 +45,6 @@ export default async function AdminDashboardPage() {
 
           <Link href="/admin/results" className="btn btn-secondary">
             Kết quả
-          </Link>
-
-          <Link href="/admin/upload" className="btn btn-secondary">
-            Upload video
           </Link>
         </>
       }
