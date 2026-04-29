@@ -181,21 +181,21 @@ export default async function Round1ScoreSheetsPrintPage() {
               </table>
             </section>
 
-            <section className="signature-section">
-              <div>
-                <strong>Chữ ký Thư ký</strong>
-                <br />
-                <br />
-                <br />
-              </div>
+           <section className="signature-section">
+  <div>
+    <strong>THƯ KÝ</strong>
+    <br />
+    <br />
+    <br />
+  </div>
 
-              <div>
-                <strong>Chữ ký Ban Giám khảo</strong>
-                <br />
-                <br />
-                <br />
-              </div>
-            </section>
+  <div>
+    <strong>GIÁM KHẢO</strong>
+    <br />
+    <br />
+    <br />
+  </div>
+</section>
 
             <div className="sheet-footer">
               Phiếu {index + 1} / {sheetRows.length}
