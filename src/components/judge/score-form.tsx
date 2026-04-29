@@ -20,15 +20,7 @@ type Props = {
   items?: ExistingItem[];
 };
 
-export function ScoreForm({
-  contestantId,
-  canEdit,
-  strengths: initialStrengths,
-  weaknesses: initialWeaknesses,
-  items = [],
-}: Props) {
-  const [strengths, setStrengths] = useState(initialStrengths ?? '');
-  const [weaknesses, setWeaknesses] = useState(initialWeaknesses ?? '');
+export function ScoreForm({ contestantId, canEdit, items = [] }: Props) {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [values, setValues] = useState<Record<string, number>>(() => {
@@ -94,8 +86,6 @@ export function ScoreForm({
       body: JSON.stringify({
         contestantId,
         action,
-        strengths,
-        weaknesses,
         items: scoreItems,
       }),
     });
@@ -173,31 +163,6 @@ export function ScoreForm({
           </section>
         ))}
       </div>
-
-      <section className="notes-grid">
-        <div className="field-group">
-          <label className="field-label">Ưu điểm</label>
-          <textarea
-            rows={5}
-            disabled={!canEdit || loading}
-            value={strengths}
-            onChange={(e) => setStrengths(e.target.value)}
-            className="textarea"
-            placeholder="Ghi lại những điểm nổi bật của thí sinh..."
-          />
-        </div>
-        <div className="field-group">
-          <label className="field-label">Hạn chế</label>
-          <textarea
-            rows={5}
-            disabled={!canEdit || loading}
-            value={weaknesses}
-            onChange={(e) => setWeaknesses(e.target.value)}
-            className="textarea"
-            placeholder="Ghi lại những điểm cần cải thiện..."
-          />
-        </div>
-      </section>
 
       {message ? <div className="alert alert-info">{message}</div> : null}
 
