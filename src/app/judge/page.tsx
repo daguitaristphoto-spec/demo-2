@@ -11,9 +11,14 @@ const JUDGE_NAV = [
     description: 'Xem toàn bộ thí sinh bạn được phân công ở vòng sơ loại.',
   },
   {
-    href: '/judge/live',
-    label: 'Chấm trực tiếp vòng 2-3',
-    description: 'Chấm các thí sinh ở vòng bán kết và chung kết.',
+    href: '/judge/round2',
+    label: 'Chấm vòng 2',
+    description: 'Chấm cặp thí sinh ở vòng bán kết.',
+  },
+  {
+    href: '/judge/round3',
+    label: 'Chấm vòng 3',
+    description: 'Chấm liên thông các chặng chung kết.',
   },
 ];
 
@@ -64,11 +69,13 @@ export default async function JudgeDashboardPage() {
             Chấm vòng 1
           </Link>
 
-          <Link href="/judge/live" className="btn btn-secondary">
-            Chấm trực tiếp vòng 2-3
-          </Link>
-        </div>
-      </section>
+          <Link href="/judge/round2" className="btn btn-secondary">
+  Chấm vòng 2
+</Link>
+
+<Link href="/judge/round3" className="btn btn-secondary">
+  Chấm vòng 3
+</Link>
 
       <section className="stats-grid">
         <StatCard
