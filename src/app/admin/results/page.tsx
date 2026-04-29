@@ -57,6 +57,23 @@ export default async function AdminResultsPage() {
         </Link>
 
         <Link
+          href="/admin/round2-results"
+          className="card-surface"
+          style={{
+            display: 'block',
+            textDecoration: 'none',
+            color: 'inherit',
+            padding: 20,
+          }}
+        >
+          <div className="eyebrow">Vòng 2</div>
+          <h3 className="card-title">Tổng hợp điểm vòng 2</h3>
+          <p className="card-subtitle">
+            Xem bảng xếp hạng vòng 2, điểm từng giám khảo và điểm trung bình của từng thí sinh.
+          </p>
+        </Link>
+
+        <Link
           href="/admin/round2-score-sheets/print"
           target="_blank"
           className="card-surface"
@@ -75,7 +92,7 @@ export default async function AdminResultsPage() {
         </Link>
 
         <Link
-          href="/admin/round2-results"
+          href="/admin/round3-results"
           className="card-surface"
           style={{
             display: 'block',
@@ -84,10 +101,10 @@ export default async function AdminResultsPage() {
             padding: 20,
           }}
         >
-          <div className="eyebrow">Vòng 2</div>
-          <h3 className="card-title">Tổng hợp điểm vòng 2</h3>
+          <div className="eyebrow">Vòng 3</div>
+          <h3 className="card-title">Tổng hợp điểm vòng 3</h3>
           <p className="card-subtitle">
-            Xem bảng xếp hạng vòng 2, điểm từng giám khảo và điểm trung bình của từng thí sinh.
+            Xem điểm từng chặng, lấy Top 3 sau chặng 1 + 2 và xếp hạng chung cuộc sau chặng 3.
           </p>
         </Link>
 
@@ -98,10 +115,10 @@ export default async function AdminResultsPage() {
             opacity: 0.55,
           }}
         >
-          <div className="eyebrow">Vòng 3</div>
-          <h3 className="card-title">Tổng hợp điểm vòng 3</h3>
+          <div className="eyebrow">PDF</div>
+          <h3 className="card-title">Xuất phiếu PDF vòng 3</h3>
           <p className="card-subtitle">
-            Sẽ bổ sung sau khi hoàn thiện luồng chấm trực tiếp vòng chung kết.
+            Sẽ bổ sung sau khi hoàn thiện mẫu phiếu chấm điểm cho 3 chặng chung kết.
           </p>
         </div>
       </section>
