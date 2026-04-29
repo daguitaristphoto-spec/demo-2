@@ -15,9 +15,20 @@ type PairForm = {
   contestantIds: string[];
 };
 
+type TieBreakInfo = {
+  needsVote: boolean;
+  sessionId: string;
+  title: string;
+  description: string;
+  cutoffScore: number;
+  slotsToFill: number;
+  candidates: Contestant[];
+};
+
 export default function Round2PairsPage() {
   const [topContestants, setTopContestants] = useState<Contestant[]>([]);
   const [pairs, setPairs] = useState<PairForm[]>([]);
+  const [tieBreak, setTieBreak] = useState<TieBreakInfo | null>(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -52,6 +63,15 @@ export default function Round2PairsPage() {
 
       const contestants = json.topContestants || [];
       setTopContestants(contestants);
+      setTieBreak(json.tieBreak || null);
+
+      if (json.tieBreak?.needsVote) {
+        setPairs([]);
+        setMessage(
+          "Có thí sinh đồng điểm ở ngưỡng Top 30. Hệ thống đã tạo phiên vote. Cần giám khảo vote và admin chốt vote trước khi gán cặp."
+        );
+        return;
+      }
 
       const existingPairs = json.pairs || [];
 
@@ -75,6 +95,11 @@ export default function Round2PairsPage() {
   }
 
   function autoCreatePairs(sourceContestants = topContestants) {
+    if (tieBreak?.needsVote) {
+      setMessage("Cần chốt vote đồng điểm trước khi tự ghép cặp vòng 2.");
+      return;
+    }
+
     const nextPairs: PairForm[] = [];
 
     for (let index = 0; index < sourceContestants.length; index += 2) {
@@ -107,6 +132,11 @@ export default function Round2PairsPage() {
   }
 
   function addPair() {
+    if (tieBreak?.needsVote) {
+      setMessage("Cần chốt vote đồng điểm trước khi thêm cặp vòng 2.");
+      return;
+    }
+
     setPairs((prev) => [
       ...prev,
       {
@@ -152,6 +182,11 @@ export default function Round2PairsPage() {
   }
 
   async function savePairs() {
+    if (tieBreak?.needsVote) {
+      setMessage("Cần chốt vote đồng điểm trước khi lưu danh sách cặp vòng 2.");
+      return;
+    }
+
     const errorMessage = validatePairs();
 
     if (errorMessage) {
@@ -227,7 +262,11 @@ export default function Round2PairsPage() {
             </p>
           </div>
 
-          <button className="btn btn-secondary" onClick={() => autoCreatePairs()} disabled={loading || topContestants.length === 0}>
+          <button
+            className="btn btn-secondary"
+            onClick={() => autoCreatePairs()}
+            disabled={loading || topContestants.length === 0 || Boolean(tieBreak?.needsVote)}
+          >
             Tự ghép theo thứ hạng
           </button>
         </div>
@@ -237,9 +276,53 @@ export default function Round2PairsPage() {
             Chưa có dữ liệu top thí sinh vòng 1. Hãy nộp phiếu vòng 1 trước, sau đó quay lại trang này.
           </p>
         ) : null}
+
+        {tieBreak?.needsVote ? (
+          <div
+            style={{
+              marginTop: 16,
+              padding: 16,
+              borderRadius: 14,
+              border: "1px solid rgba(245,158,11,0.55)",
+              background: "rgba(245,158,11,0.16)",
+            }}
+          >
+            <h3 style={{ marginTop: 0 }}>Cần vote xử lý đồng điểm</h3>
+
+            <p>
+              Có thí sinh đồng điểm ở ngưỡng Top 30 vòng 1. Hệ thống đã tạo phiên vote:
+              <strong> {tieBreak.title}</strong>.
+            </p>
+
+            <p>
+              Điểm ngưỡng: <strong>{Number(tieBreak.cutoffScore).toFixed(2)}</strong> · Số suất cần chọn:{" "}
+              <strong>{tieBreak.slotsToFill}</strong>
+            </p>
+
+            <p>
+              Sau khi 5 giám khảo vote xong, admin vào trang quản lý vote để chốt kết quả. Sau đó quay lại trang này và bấm tải lại.
+            </p>
+
+            <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 12 }}>
+              <Link href="/admin/tie-breaks" className="btn btn-primary">
+                Mở trang quản lý vote
+              </Link>
+
+              <button className="btn btn-secondary" onClick={loadData} disabled={loading}>
+                Tải lại sau khi chốt vote
+              </button>
+            </div>
+          </div>
+        ) : null}
       </section>
 
-      <section className="card-surface" style={{ marginTop: 24 }}>
+      <section
+        className="card-surface"
+        style={{
+          marginTop: 24,
+          opacity: tieBreak?.needsVote ? 0.55 : 1,
+        }}
+      >
         <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
           <div>
             <h2 style={{ margin: 0 }}>Danh sách cặp vòng 2</h2>
@@ -248,10 +331,20 @@ export default function Round2PairsPage() {
             </p>
           </div>
 
-          <button className="btn btn-secondary" onClick={addPair} disabled={loading}>
+          <button
+            className="btn btn-secondary"
+            onClick={addPair}
+            disabled={loading || Boolean(tieBreak?.needsVote)}
+          >
             Thêm cặp
           </button>
         </div>
+
+        {tieBreak?.needsVote ? (
+          <p style={{ marginTop: 16, fontWeight: 700 }}>
+            Đang tạm khóa chức năng gán cặp vì cần xử lý vote đồng điểm trước.
+          </p>
+        ) : null}
 
         <div style={{ display: "flex", flexDirection: "column", gap: 16, marginTop: 20 }}>
           {pairs.map((pair, pairIndex) => (
@@ -269,7 +362,7 @@ export default function Round2PairsPage() {
                 <button
                   type="button"
                   onClick={() => removePair(pairIndex)}
-                  disabled={loading}
+                  disabled={loading || Boolean(tieBreak?.needsVote)}
                   style={{
                     padding: "6px 10px",
                     borderRadius: 10,
@@ -301,7 +394,7 @@ export default function Round2PairsPage() {
                       <select
                         value={selectedId}
                         onChange={(e) => updatePair(pairIndex, positionIndex, e.target.value)}
-                        disabled={loading}
+                        disabled={loading || Boolean(tieBreak?.needsVote)}
                         style={{
                           display: "block",
                           marginTop: 8,
@@ -333,7 +426,11 @@ export default function Round2PairsPage() {
         </div>
 
         <div style={{ marginTop: 24, display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-          <button className="btn btn-primary" onClick={savePairs} disabled={loading || pairs.length === 0}>
+          <button
+            className="btn btn-primary"
+            onClick={savePairs}
+            disabled={loading || pairs.length === 0 || Boolean(tieBreak?.needsVote)}
+          >
             {loading ? "Đang lưu..." : "Lưu danh sách cặp"}
           </button>
 
