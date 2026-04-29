@@ -69,7 +69,9 @@ async function countCompletedJudges(adminSupabase: any, roundKey: string) {
     throw new Error(error.message);
   }
 
-  return new Set((data || []).map((row: any) => String(row.judge_id))).size;
+  const judgeIds: string[] = (data || []).map((row: any) => String(row.judge_id));
+
+  return Array.from(new Set<string>(judgeIds)).length;
 }
 
 async function getRound2ExpectedContestants(adminSupabase: any): Promise<string[]> {
@@ -97,7 +99,11 @@ async function getRound2ExpectedContestants(adminSupabase: any): Promise<string[
     throw new Error(membersError.message);
   }
 
-  return [...new Set((members || []).map((member: any) => String(member.contestant_id)))];
+  const contestantIds: string[] = (members || []).map((member: any) =>
+    String(member.contestant_id)
+  );
+
+  return Array.from(new Set<string>(contestantIds));
 }
 
 async function getRound3ExpectedContestantsByStage(
@@ -129,7 +135,11 @@ async function getRound3ExpectedContestantsByStage(
     result[segmentId].push(contestantId);
   }
 
-  return result;
+  return {
+    round3_stage1: Array.from(new Set<string>(result.round3_stage1)),
+    round3_stage2: Array.from(new Set<string>(result.round3_stage2)),
+    round3_stage3: Array.from(new Set<string>(result.round3_stage3)),
+  };
 }
 
 async function getSubmittedContestants(
@@ -152,7 +162,11 @@ async function getSubmittedContestants(
     throw new Error(error.message);
   }
 
-  return new Set((data || []).map((row: any) => String(row.contestant_id)));
+  const submittedIds: string[] = (data || []).map((row: any) =>
+    String(row.contestant_id)
+  );
+
+  return new Set<string>(submittedIds);
 }
 
 async function checkRound2Completeness(adminSupabase: any, judgeId: string) {
@@ -254,7 +268,11 @@ async function checkRound3Completeness(adminSupabase: any, judgeId: string) {
   };
 }
 
-async function checkCompleteness(adminSupabase: any, judgeId: string, roundKey: string) {
+async function checkCompleteness(
+  adminSupabase: any,
+  judgeId: string,
+  roundKey: string
+) {
   if (roundKey === "round2") {
     return checkRound2Completeness(adminSupabase, judgeId);
   }
