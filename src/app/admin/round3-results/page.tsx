@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { requireRole } from "@/lib/auth-guard";
 
+const REQUIRED_JUDGE_COUNT = 5;
+
 const ROUND3_SEGMENTS = [
   {
     id: "round3_stage1",
@@ -30,6 +32,10 @@ function formatScore(value: any) {
 function getAverage(values: number[]) {
   if (!values.length) return null;
   return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+
+function isCompleteJudgeCount(count: number) {
+  return count >= REQUIRED_JUDGE_COUNT;
 }
 
 type ContestantSummary = {
@@ -161,6 +167,14 @@ export default async function Round3ResultsPage() {
     ])
   );
 
+  const allFinalRowsHaveEnoughJudges =
+    finalRows.length > 0 &&
+    finalRows.every((row) =>
+      ROUND3_SEGMENTS.every(
+        (segment) => (row.stageScores[segment.id]?.length ?? 0) >= REQUIRED_JUDGE_COUNT
+      )
+    );
+
   return (
     <main style={{ maxWidth: 1200, margin: "0 auto", padding: 24 }}>
       <div
@@ -175,20 +189,55 @@ export default async function Round3ResultsPage() {
           <p className="eyebrow">Speak Up DNU 2026</p>
           <h1>Tổng hợp điểm vòng 3</h1>
           <p>
-            Vòng Chung kết gồm 3 chặng. Sau chặng 1 và chặng 2, hệ thống lấy 3 thí sinh có tổng điểm cao nhất vào chặng 3.
+            Vòng Chung kết gồm 3 chặng. Bảng dưới đây hiển thị điểm tạm tính theo số phiếu đã nộp.
+            Kết quả chính thức chỉ nên chốt khi đủ 5 giám khảo.
           </p>
         </div>
 
-        <Link href="/admin/results" className="btn btn-secondary">
-          Quay lại kết quả
-        </Link>
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+          <Link
+            href="/admin/round3-score-sheets/print"
+            target="_blank"
+            className="btn btn-primary"
+          >
+            Xuất phiếu PDF vòng 3
+          </Link>
+
+          <Link href="/admin/results" className="btn btn-secondary">
+            Quay lại kết quả
+          </Link>
+        </div>
       </div>
+
+      <section
+        className="card-surface"
+        style={{
+          marginTop: 24,
+          border: allFinalRowsHaveEnoughJudges
+            ? "1px solid rgba(34,197,94,0.35)"
+            : "1px solid rgba(245,158,11,0.45)",
+        }}
+      >
+        <div className="card-header">
+          <h3 className="card-title">
+            {allFinalRowsHaveEnoughJudges
+              ? "Đã đủ dữ liệu 5 giám khảo"
+              : "Kết quả đang là tạm tính"}
+          </h3>
+          <p className="card-subtitle">
+            Hiện hệ thống đang tính trung bình theo số phiếu đã nộp. Nếu mới có 1 giám khảo test,
+            điểm trung bình chính là điểm của giám khảo đó. Không nên dùng bảng này để công bố giải
+            cho đến khi đủ 5/5 giám khảo và admin chốt điểm chính thức.
+          </p>
+        </div>
+      </section>
 
       <section className="card-surface" style={{ marginTop: 24 }}>
         <div className="card-header">
           <h3 className="card-title">Thao tác chuyển chặng</h3>
           <p className="card-subtitle">
-            Sau khi chấm xong vòng 2, bấm nút đầu để lấy 10 thí sinh có điểm cao nhất vòng 2 vào vòng 3 chặng 1 và chặng 2. Sau khi chấm xong chặng 1 + 2, bấm nút thứ hai để lấy Top 3 vào chặng 3.
+            Sau khi chấm xong vòng 2, bấm nút đầu để lấy 10 thí sinh có điểm cao nhất vòng 2 vào vòng 3 chặng 1 và chặng 2.
+            Sau khi chấm xong chặng 1 + 2, bấm nút thứ hai để lấy Top 3 vào chặng 3.
           </p>
         </div>
 
@@ -213,9 +262,9 @@ export default async function Round3ResultsPage() {
 
       <section className="card-surface" style={{ marginTop: 24 }}>
         <div className="card-header">
-          <h3 className="card-title">Xếp hạng sau chặng 1 + chặng 2</h3>
+          <h3 className="card-title">Xếp hạng tạm thời sau chặng 1 + chặng 2</h3>
           <p className="card-subtitle">
-            Bảng này dùng để chọn 3 thí sinh vào chặng 3.
+            Bảng này dùng để theo dõi tạm thời. Chỉ dùng để chọn Top 3 khi đủ phiếu của 5 giám khảo.
           </p>
         </div>
 
@@ -227,36 +276,51 @@ export default async function Round3ResultsPage() {
                 <th>SBD</th>
                 <th>Thí sinh</th>
                 <th>Điểm TB chặng 1</th>
+                <th>Phiếu chặng 1</th>
                 <th>Điểm TB chặng 2</th>
+                <th>Phiếu chặng 2</th>
                 <th>Tổng chặng 1 + 2</th>
-                <th>Kết quả</th>
+                <th>Kết quả tạm</th>
               </tr>
             </thead>
 
             <tbody>
-              {afterStage2Rows.map((row, index) => (
-                <tr
-                  key={row.contestantId}
-                  style={{
-                    background:
-                      index < 3 ? "rgba(22, 163, 74, 0.18)" : "transparent",
-                  }}
-                >
-                  <td className="strong-cell">{index + 1}</td>
-                  <td className="strong-cell">{row.sbd}</td>
-                  <td>{row.fullName}</td>
-                  <td>{formatScore(row.stageAverages.round3_stage1)}</td>
-                  <td>{formatScore(row.stageAverages.round3_stage2)}</td>
-                  <td className="strong-cell">
-                    {formatScore(row.afterStage2Total)}
-                  </td>
-                  <td>{index < 3 ? "Top 3 vào chặng 3" : "-"}</td>
-                </tr>
-              ))}
+              {afterStage2Rows.map((row, index) => {
+                const stage1Count = row.stageScores.round3_stage1?.length ?? 0;
+                const stage2Count = row.stageScores.round3_stage2?.length ?? 0;
+                const enoughVotes =
+                  isCompleteJudgeCount(stage1Count) && isCompleteJudgeCount(stage2Count);
+
+                return (
+                  <tr
+                    key={row.contestantId}
+                    style={{
+                      background:
+                        index < 3 ? "rgba(22, 163, 74, 0.18)" : "transparent",
+                    }}
+                  >
+                    <td className="strong-cell">{index + 1}</td>
+                    <td className="strong-cell">{row.sbd}</td>
+                    <td>{row.fullName}</td>
+                    <td>{formatScore(row.stageAverages.round3_stage1)}</td>
+                    <td>{stage1Count}/{REQUIRED_JUDGE_COUNT}</td>
+                    <td>{formatScore(row.stageAverages.round3_stage2)}</td>
+                    <td>{stage2Count}/{REQUIRED_JUDGE_COUNT}</td>
+                    <td className="strong-cell">{formatScore(row.afterStage2Total)}</td>
+                    <td>
+                      {enoughVotes
+                        ? index < 3
+                          ? "Top 3 vào chặng 3"
+                          : "-"
+                        : "Tạm tính"}
+                    </td>
+                  </tr>
+                );
+              })}
 
               {afterStage2Rows.length === 0 ? (
                 <tr>
-                  <td colSpan={7} style={{ textAlign: "center", padding: 24 }}>
+                  <td colSpan={9} style={{ textAlign: "center", padding: 24 }}>
                     Chưa có đủ dữ liệu chặng 1 và chặng 2.
                   </td>
                 </tr>
@@ -275,7 +339,7 @@ export default async function Round3ResultsPage() {
           <div className="card-header">
             <h3 className="card-title">{segment.label}</h3>
             <p className="card-subtitle">
-              Bảng xếp hạng riêng của {segment.label.toLowerCase()}.
+              Bảng điểm riêng của {segment.label.toLowerCase()} theo số phiếu đã nộp.
             </p>
           </div>
 
@@ -288,27 +352,31 @@ export default async function Round3ResultsPage() {
                   <th>Thí sinh</th>
                   <th>Số phiếu</th>
                   <th>Điểm từng GK</th>
-                  <th>Điểm TB</th>
+                  <th>Điểm TB tạm tính</th>
                 </tr>
               </thead>
 
               <tbody>
-                {(stageRows[segment.id] || []).map((row, index) => (
-                  <tr key={`${segment.id}-${row.contestantId}`}>
-                    <td className="strong-cell">{index + 1}</td>
-                    <td className="strong-cell">{row.sbd}</td>
-                    <td>{row.fullName}</td>
-                    <td>{row.stageScores[segment.id]?.length ?? 0}</td>
-                    <td>
-                      {(row.stageScores[segment.id] || [])
-                        .map((score) => formatScore(score))
-                        .join(" | ")}
-                    </td>
-                    <td className="strong-cell">
-                      {formatScore(row.stageAverages[segment.id])}
-                    </td>
-                  </tr>
-                ))}
+                {(stageRows[segment.id] || []).map((row, index) => {
+                  const voteCount = row.stageScores[segment.id]?.length ?? 0;
+
+                  return (
+                    <tr key={`${segment.id}-${row.contestantId}`}>
+                      <td className="strong-cell">{index + 1}</td>
+                      <td className="strong-cell">{row.sbd}</td>
+                      <td>{row.fullName}</td>
+                      <td>{voteCount}/{REQUIRED_JUDGE_COUNT}</td>
+                      <td>
+                        {(row.stageScores[segment.id] || [])
+                          .map((score) => formatScore(score))
+                          .join(" | ")}
+                      </td>
+                      <td className="strong-cell">
+                        {formatScore(row.stageAverages[segment.id])}
+                      </td>
+                    </tr>
+                  );
+                })}
 
                 {(stageRows[segment.id] || []).length === 0 ? (
                   <tr>
@@ -325,9 +393,10 @@ export default async function Round3ResultsPage() {
 
       <section className="card-surface" style={{ marginTop: 24 }}>
         <div className="card-header">
-          <h3 className="card-title">Xếp hạng chung cuộc sau chặng 3</h3>
+          <h3 className="card-title">Xếp hạng chung cuộc tạm tính sau chặng 3</h3>
           <p className="card-subtitle">
-            Tổng chung cuộc = điểm TB chặng 1 + điểm TB chặng 2 + điểm TB chặng 3.
+            Tổng chung cuộc tạm tính = điểm TB chặng 1 + điểm TB chặng 2 + điểm TB chặng 3.
+            Chỉ công bố giải khi đủ 5/5 giám khảo.
           </p>
         </div>
 
@@ -335,27 +404,39 @@ export default async function Round3ResultsPage() {
           <table className="data-table">
             <thead>
               <tr>
-                <th>Hạng</th>
+                <th>Hạng tạm</th>
                 <th>SBD</th>
                 <th>Thí sinh</th>
                 <th>Chặng 1</th>
+                <th>Phiếu 1</th>
                 <th>Chặng 2</th>
+                <th>Phiếu 2</th>
                 <th>Chặng 3</th>
-                <th>Tổng chung cuộc</th>
-                <th>Giải dự kiến</th>
+                <th>Phiếu 3</th>
+                <th>Tổng tạm tính</th>
+                <th>Giải</th>
               </tr>
             </thead>
 
             <tbody>
               {finalRows.map((row, index) => {
+                const stage1Count = row.stageScores.round3_stage1?.length ?? 0;
+                const stage2Count = row.stageScores.round3_stage2?.length ?? 0;
+                const stage3Count = row.stageScores.round3_stage3?.length ?? 0;
+
+                const enoughVotes =
+                  isCompleteJudgeCount(stage1Count) &&
+                  isCompleteJudgeCount(stage2Count) &&
+                  isCompleteJudgeCount(stage3Count);
+
                 const prize =
-                  index === 0
+                  enoughVotes && index === 0
                     ? "Giải Nhất"
-                    : index === 1
+                    : enoughVotes && index === 1
                       ? "Giải Nhì"
-                      : index === 2
+                      : enoughVotes && index === 2
                         ? "Giải Ba"
-                        : "-";
+                        : "Chưa chốt";
 
                 return (
                   <tr key={`final-${row.contestantId}`}>
@@ -363,8 +444,11 @@ export default async function Round3ResultsPage() {
                     <td className="strong-cell">{row.sbd}</td>
                     <td>{row.fullName}</td>
                     <td>{formatScore(row.stageAverages.round3_stage1)}</td>
+                    <td>{stage1Count}/{REQUIRED_JUDGE_COUNT}</td>
                     <td>{formatScore(row.stageAverages.round3_stage2)}</td>
+                    <td>{stage2Count}/{REQUIRED_JUDGE_COUNT}</td>
                     <td>{formatScore(row.stageAverages.round3_stage3)}</td>
+                    <td>{stage3Count}/{REQUIRED_JUDGE_COUNT}</td>
                     <td className="strong-cell">{formatScore(row.finalTotal)}</td>
                     <td>{prize}</td>
                   </tr>
@@ -373,7 +457,7 @@ export default async function Round3ResultsPage() {
 
               {finalRows.length === 0 ? (
                 <tr>
-                  <td colSpan={8} style={{ textAlign: "center", padding: 24 }}>
+                  <td colSpan={11} style={{ textAlign: "center", padding: 24 }}>
                     Chưa có đủ dữ liệu chặng 3 để xếp hạng chung cuộc.
                   </td>
                 </tr>
