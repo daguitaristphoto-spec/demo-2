@@ -31,9 +31,6 @@ export default function JudgeLiveScoringPage() {
   const [contestantId, setContestantId] = useState("");
   const [criteria, setCriteria] = useState<Criterion[]>([]);
   const [scores, setScores] = useState<Record<string, string>>({});
-  const [strengths, setStrengths] = useState("");
-  const [weaknesses, setWeaknesses] = useState("");
-  const [notes, setNotes] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -67,9 +64,6 @@ export default function JudgeLiveScoringPage() {
 
   useEffect(() => {
     setScores({});
-    setStrengths("");
-    setWeaknesses("");
-    setNotes("");
     setMessage("");
   }, [contestantId]);
 
@@ -217,9 +211,6 @@ export default function JudgeLiveScoringPage() {
           segmentId,
           contestantId,
           scores: buildNumericScores(),
-          strengths,
-          weaknesses,
-          notes,
           submit: true,
         }),
       });
@@ -343,42 +334,6 @@ export default function JudgeLiveScoringPage() {
               </label>
             ))}
           </div>
-
-          <section style={{ marginTop: 20 }}>
-            <label>
-              <strong>Điểm mạnh</strong>
-            </label>
-            <textarea
-              value={strengths}
-              onChange={(e) => setStrengths(e.target.value)}
-              style={{ display: "block", width: "100%", minHeight: 80, marginTop: 8 }}
-              disabled={loading}
-            />
-          </section>
-
-          <section style={{ marginTop: 16 }}>
-            <label>
-              <strong>Điểm cần cải thiện</strong>
-            </label>
-            <textarea
-              value={weaknesses}
-              onChange={(e) => setWeaknesses(e.target.value)}
-              style={{ display: "block", width: "100%", minHeight: 80, marginTop: 8 }}
-              disabled={loading}
-            />
-          </section>
-
-          <section style={{ marginTop: 16 }}>
-            <label>
-              <strong>Ghi chú khác</strong>
-            </label>
-            <textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              style={{ display: "block", width: "100%", minHeight: 80, marginTop: 8 }}
-              disabled={loading}
-            />
-          </section>
 
           <h3 style={{ marginTop: 20 }}>Tổng điểm tạm tính: {totalScore}</h3>
 
