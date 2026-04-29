@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { requireRole } from "@/lib/auth-guard";
 
+const REQUIRED_JUDGE_COUNT = 5;
+
 function pickRelation(value: any) {
   return Array.isArray(value) ? value[0] : value;
 }
@@ -18,7 +20,6 @@ type ContestantResult = {
   fullName: string;
   pairNo: number | null;
   scores: number[];
-  judges: string[];
   averageScore: number;
   totalJudges: number;
 };
@@ -63,7 +64,6 @@ export default async function Round2ResultsPage() {
 
   for (const sheet of sheets ?? []) {
     const contestant = pickRelation((sheet as any).contestant);
-    const judge = pickRelation((sheet as any).judge);
     const pair = pickRelation((sheet as any).pair);
 
     if (!contestant?.id) continue;
@@ -75,7 +75,6 @@ export default async function Round2ResultsPage() {
         fullName: contestant.full_name,
         pairNo: pair?.pair_no ?? null,
         scores: [],
-        judges: [],
         averageScore: 0,
         totalJudges: 0,
       });
@@ -85,7 +84,6 @@ export default async function Round2ResultsPage() {
     const score = Number((sheet as any).total_score ?? 0);
 
     current.scores.push(score);
-    current.judges.push(judge?.full_name ?? "Không rõ giám khảo");
   }
 
   const rows = Array.from(grouped.values())
@@ -103,13 +101,21 @@ export default async function Round2ResultsPage() {
 
   return (
     <main style={{ maxWidth: 1200, margin: "0 auto", padding: 24 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 16, alignItems: "center" }}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          gap: 16,
+          alignItems: "center",
+        }}
+      >
         <div>
           <p className="eyebrow">Speak Up DNU 2026</p>
           <h1>Tổng hợp điểm vòng 2</h1>
           <p>
-            Bảng tổng hợp điểm vòng Bán kết - Vượt ải. Nếu một thí sinh được nhiều giám khảo chấm,
-            điểm hiển thị là điểm trung bình của các giám khảo.
+            Bảng tổng hợp điểm vòng Bán kết - Vượt ải. Điểm hiển thị là điểm trung bình
+            của các giám khảo đã nộp phiếu. Khi đủ 5/5 giám khảo, đây là điểm trung bình
+            cộng của 5 giám khảo.
           </p>
         </div>
 
@@ -118,7 +124,11 @@ export default async function Round2ResultsPage() {
             Quay lại kết quả
           </Link>
 
-          <Link href="/admin/round2-score-sheets/print" className="btn btn-primary" target="_blank">
+          <Link
+            href="/admin/round2-score-sheets/print"
+            className="btn btn-primary"
+            target="_blank"
+          >
             Xuất phiếu PDF vòng 2
           </Link>
         </div>
@@ -128,7 +138,8 @@ export default async function Round2ResultsPage() {
         <div className="card-header">
           <h3 className="card-title">Bảng xếp hạng vòng 2</h3>
           <p className="card-subtitle">
-            Tổng số thí sinh đã có điểm: {rows.length}. Dữ liệu được lấy từ các phiếu đã nộp chính thức.
+            Tổng số thí sinh đã có điểm: {rows.length}. Bảng này chỉ hiển thị điểm trung bình,
+            không hiển thị điểm riêng từng giám khảo.
           </p>
         </div>
 
@@ -141,29 +152,43 @@ export default async function Round2ResultsPage() {
                 <th>SBD</th>
                 <th>Thí sinh</th>
                 <th>Số GK đã chấm</th>
-                <th>Điểm từng GK</th>
                 <th>Điểm TB</th>
-                <th>Giám khảo</th>
+                <th>Trạng thái</th>
               </tr>
             </thead>
 
             <tbody>
-              {rows.map((row, index) => (
-                <tr key={row.contestantId}>
-                  <td className="strong-cell">{index + 1}</td>
-                  <td>{row.pairNo ? `Cặp ${row.pairNo}` : "-"}</td>
-                  <td className="strong-cell">{row.sbd}</td>
-                  <td>{row.fullName}</td>
-                  <td>{row.totalJudges}</td>
-                  <td>{row.scores.map((score) => formatScore(score)).join(" | ")}</td>
-                  <td className="strong-cell">{formatScore(row.averageScore)}</td>
-                  <td>{row.judges.join(" | ")}</td>
-                </tr>
-              ))}
+              {rows.map((row, index) => {
+                const isComplete = row.totalJudges >= REQUIRED_JUDGE_COUNT;
+
+                return (
+                  <tr key={row.contestantId}>
+                    <td className="strong-cell">{index + 1}</td>
+                    <td>{row.pairNo ? `Cặp ${row.pairNo}` : "-"}</td>
+                    <td className="strong-cell">{row.sbd}</td>
+                    <td>{row.fullName}</td>
+                    <td>
+                      {row.totalJudges}/{REQUIRED_JUDGE_COUNT}
+                    </td>
+                    <td className="strong-cell">{formatScore(row.averageScore)}</td>
+                    <td>
+                      {isComplete ? (
+                        <span style={{ fontWeight: 700, color: "#86efac" }}>
+                          Đủ 5 GK
+                        </span>
+                      ) : (
+                        <span style={{ fontWeight: 700, color: "#fbbf24" }}>
+                          Tạm tính
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
 
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={8} style={{ textAlign: "center", padding: 24 }}>
+                  <td colSpan={7} style={{ textAlign: "center", padding: 24 }}>
                     Chưa có phiếu chấm vòng 2 nào được nộp chính thức.
                   </td>
                 </tr>
