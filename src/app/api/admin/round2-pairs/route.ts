@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { resolveTopWithTie, type RankedContestant } from "@/lib/tie-breaks";
 
 function pickRelation(value: any) {
   return Array.isArray(value) ? value[0] : value;
@@ -37,13 +38,7 @@ async function requireAdmin() {
   return { user, profile, adminSupabase };
 }
 
-export async function GET() {
-  const auth = await requireAdmin();
-  if ("error" in auth) return auth.error;
-
-  const { adminSupabase } = auth;
-  const segmentId = "round2_semifinal";
-
+async function getRound1RankedContestants(adminSupabase: any): Promise<RankedContestant[]> {
   const { data: sheets, error: sheetsError } = await adminSupabase
     .from("score_sheets")
     .select(`
@@ -53,104 +48,160 @@ export async function GET() {
       contestant:contestants(id, sbd, full_name)
     `)
     .eq("status", "submitted")
-    .or("segment_id.eq.round1_online,segment_id.is.null")
-    .order("total_score", { ascending: false });
+    .or("segment_id.eq.round1_online,segment_id.is.null");
 
   if (sheetsError) {
-    return NextResponse.json({ error: sheetsError.message }, { status: 500 });
+    throw new Error(sheetsError.message);
   }
 
-  const seenContestants = new Set<string>();
-  const topContestants: any[] = [];
+  const grouped = new Map<
+    string,
+    {
+      contestantId: string;
+      sbd: string;
+      fullName: string;
+      scores: number[];
+    }
+  >();
 
   for (const sheet of sheets || []) {
     const contestant = pickRelation((sheet as any).contestant);
 
-    if (!contestant?.id || seenContestants.has(contestant.id)) {
-      continue;
+    if (!contestant?.id) continue;
+
+    if (!grouped.has(contestant.id)) {
+      grouped.set(contestant.id, {
+        contestantId: contestant.id,
+        sbd: contestant.sbd,
+        fullName: contestant.full_name,
+        scores: [],
+      });
     }
 
-    seenContestants.add(contestant.id);
+    grouped.get(contestant.id)?.scores.push(Number((sheet as any).total_score ?? 0));
+  }
 
-    topContestants.push({
-      id: contestant.id,
-      sbd: contestant.sbd,
-      full_name: contestant.full_name,
-      total_score: Number((sheet as any).total_score ?? 0),
+  return Array.from(grouped.values())
+    .map((row) => {
+      const total = row.scores.reduce((sum, score) => sum + score, 0);
+      const average = row.scores.length > 0 ? total / row.scores.length : 0;
+
+      return {
+        contestantId: row.contestantId,
+        sbd: row.sbd,
+        fullName: row.fullName,
+        score: average,
+      };
+    })
+    .sort((a, b) => b.score - a.score || String(a.sbd).localeCompare(String(b.sbd), "vi"));
+}
+
+export async function GET() {
+  const auth = await requireAdmin();
+  if ("error" in auth) return auth.error;
+
+  const { user, adminSupabase } = auth;
+  const segmentId = "round2_semifinal";
+
+  try {
+    const rankedRows = await getRound1RankedContestants(adminSupabase);
+
+    const resolvedTop30 = await resolveTopWithTie({
+      adminSupabase,
+      transitionKey: "round1_to_round2",
+      title: "Vote chọn thí sinh vào vòng 2",
+      description:
+        "Có thí sinh đồng điểm ở ngưỡng Top 30 vòng 1. Giám khảo vote để chọn thí sinh đi tiếp vào vòng 2.",
+      topN: 30,
+      rows: rankedRows,
+      createdBy: user.id,
     });
 
-    if (topContestants.length >= 30) {
-      break;
-    }
-  }
+    const topContestants = resolvedTop30.qualifiedRows.map((row) => ({
+      id: row.contestantId,
+      sbd: row.sbd,
+      full_name: row.fullName,
+      total_score: row.score,
+    }));
 
-  const { data: pairs, error: pairsError } = await adminSupabase
-    .from("round2_pairs")
-    .select("id, segment_id, pair_no")
-    .eq("segment_id", segmentId)
-    .order("pair_no");
+    const { data: pairs, error: pairsError } = await adminSupabase
+      .from("round2_pairs")
+      .select("id, segment_id, pair_no")
+      .eq("segment_id", segmentId)
+      .order("pair_no");
 
-  if (pairsError) {
-    return NextResponse.json({ error: pairsError.message }, { status: 500 });
-  }
-
-  const pairIds = (pairs || []).map((pair: any) => pair.id);
-
-  let members: any[] = [];
-
-  if (pairIds.length > 0) {
-    const { data: memberRows, error: membersError } = await adminSupabase
-      .from("round2_pair_members")
-      .select("pair_id, contestant_id, position_no")
-      .in("pair_id", pairIds)
-      .order("position_no");
-
-    if (membersError) {
-      return NextResponse.json({ error: membersError.message }, { status: 500 });
+    if (pairsError) {
+      return NextResponse.json({ error: pairsError.message }, { status: 500 });
     }
 
-    members = memberRows || [];
-  }
+    const pairIds = (pairs || []).map((pair: any) => pair.id);
 
-  const contestantIds = [...new Set(members.map((member) => member.contestant_id))];
+    let members: any[] = [];
 
-  let contestantsById = new Map<string, any>();
+    if (pairIds.length > 0) {
+      const { data: memberRows, error: membersError } = await adminSupabase
+        .from("round2_pair_members")
+        .select("pair_id, contestant_id, position_no")
+        .in("pair_id", pairIds)
+        .order("position_no");
 
-  if (contestantIds.length > 0) {
-    const { data: contestantRows, error: contestantsError } = await adminSupabase
-      .from("contestants")
-      .select("id, sbd, full_name")
-      .in("id", contestantIds);
+      if (membersError) {
+        return NextResponse.json({ error: membersError.message }, { status: 500 });
+      }
 
-    if (contestantsError) {
-      return NextResponse.json({ error: contestantsError.message }, { status: 500 });
+      members = memberRows || [];
     }
 
-    contestantsById = new Map((contestantRows || []).map((contestant: any) => [contestant.id, contestant]));
+    const contestantIds: string[] = Array.from(
+      new Set<string>(members.map((member: any) => String(member.contestant_id)))
+    );
+
+    let contestantsById = new Map<string, any>();
+
+    if (contestantIds.length > 0) {
+      const { data: contestantRows, error: contestantsError } = await adminSupabase
+        .from("contestants")
+        .select("id, sbd, full_name")
+        .in("id", contestantIds);
+
+      if (contestantsError) {
+        return NextResponse.json({ error: contestantsError.message }, { status: 500 });
+      }
+
+      contestantsById = new Map(
+        (contestantRows || []).map((contestant: any) => [contestant.id, contestant])
+      );
+    }
+
+    const normalizedPairs = (pairs || []).map((pair: any) => {
+      const pairMembers = members
+        .filter((member) => member.pair_id === pair.id)
+        .sort((a, b) => Number(a.position_no) - Number(b.position_no))
+        .map((member) => ({
+          contestant_id: member.contestant_id,
+          position_no: member.position_no,
+          contestant: contestantsById.get(member.contestant_id) ?? null,
+        }));
+
+      return {
+        id: pair.id,
+        segment_id: pair.segment_id,
+        pair_no: pair.pair_no,
+        members: pairMembers,
+      };
+    });
+
+    return NextResponse.json({
+      topContestants,
+      pairs: normalizedPairs,
+      tieBreak: resolvedTop30.tieBreak,
+    });
+  } catch (error: any) {
+    return NextResponse.json(
+      { error: error?.message || "Có lỗi khi tải dữ liệu gán cặp vòng 2" },
+      { status: 500 }
+    );
   }
-
-  const normalizedPairs = (pairs || []).map((pair: any) => {
-    const pairMembers = members
-      .filter((member) => member.pair_id === pair.id)
-      .sort((a, b) => Number(a.position_no) - Number(b.position_no))
-      .map((member) => ({
-        contestant_id: member.contestant_id,
-        position_no: member.position_no,
-        contestant: contestantsById.get(member.contestant_id) ?? null,
-      }));
-
-    return {
-      id: pair.id,
-      segment_id: pair.segment_id,
-      pair_no: pair.pair_no,
-      members: pairMembers,
-    };
-  });
-
-  return NextResponse.json({
-    topContestants,
-    pairs: normalizedPairs,
-  });
 }
 
 export async function POST(req: Request) {
