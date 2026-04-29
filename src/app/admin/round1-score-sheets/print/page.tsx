@@ -197,7 +197,7 @@ export default async function Round1ScoreSheetsPrintPage() {
 
             <section className="signature-section">
               <div>
-                <strong>Thư ký</strong>
+                <strong>THƯ KÝ</strong>
                 <br />
                 <br />
                 <br />
@@ -205,7 +205,7 @@ export default async function Round1ScoreSheetsPrintPage() {
               </div>
 
               <div>
-                <strong>Giám khảo</strong>
+                <strong>GÍAM KHẢO</strong>
                 <br />
                 <br />
                 <br />
