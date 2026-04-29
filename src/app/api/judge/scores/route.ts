@@ -5,12 +5,19 @@ import type { ScoreItemInput } from '@/lib/types';
 
 export async function POST(request: Request) {
   const supabase = await createClient();
+
   const { data: authData } = await supabase.auth.getUser();
+
   if (!authData.user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const { data: profile } = await supabase.from('profiles').select('role').eq('id', authData.user.id).single();
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', authData.user.id)
+    .single();
+
   if (profile?.role !== 'judge') {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
@@ -48,6 +55,8 @@ export async function POST(request: Request) {
     .select('id, status')
     .eq('contestant_id', body.contestantId)
     .eq('judge_id', authData.user.id)
+    .or('segment_id.eq.round1_online,segment_id.is.null')
+    .limit(1)
     .maybeSingle();
 
   let scoreSheetId = existingSheet?.id;
@@ -58,6 +67,7 @@ export async function POST(request: Request) {
       .insert({
         contestant_id: body.contestantId,
         judge_id: authData.user.id,
+        segment_id: 'round1_online',
         strengths: body.strengths ?? '',
         weaknesses: body.weaknesses ?? '',
         total_score: scoreResult.final100,
@@ -68,7 +78,10 @@ export async function POST(request: Request) {
       .single();
 
     if (insertError || !inserted) {
-      return NextResponse.json({ error: insertError?.message ?? 'Không tạo được phiếu chấm' }, { status: 400 });
+      return NextResponse.json(
+        { error: insertError?.message ?? 'Không tạo được phiếu chấm' },
+        { status: 400 }
+      );
     }
 
     scoreSheetId = inserted.id;
@@ -76,6 +89,7 @@ export async function POST(request: Request) {
     const { error: updateError } = await supabase
       .from('score_sheets')
       .update({
+        segment_id: 'round1_online',
         strengths: body.strengths ?? '',
         weaknesses: body.weaknesses ?? '',
         total_score: scoreResult.final100,
@@ -93,11 +107,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Không xác định được scoreSheetId' }, { status: 400 });
   }
 
-  const deleteOld = await supabase.from('score_items').delete().eq('score_sheet_id', scoreSheetId);
-  if (deleteOld.error) {
-    return NextResponse.json({ error: deleteOld.error.message }, { status: 400 });
-  }
-
   const itemRows = body.items.map((item) => ({
     score_sheet_id: scoreSheetId,
     criterion_key: item.criterionKey,
@@ -105,7 +114,12 @@ export async function POST(request: Request) {
     score: item.score,
   }));
 
-  const { error: itemsError } = await supabase.from('score_items').insert(itemRows);
+  const { error: itemsError } = await supabase
+    .from('score_items')
+    .upsert(itemRows, {
+      onConflict: 'score_sheet_id,criterion_key',
+    });
+
   if (itemsError) {
     return NextResponse.json({ error: itemsError.message }, { status: 400 });
   }
@@ -122,5 +136,9 @@ export async function POST(request: Request) {
     }
   }
 
-  return NextResponse.json({ ok: true, finalScore: scoreResult.final100, classification: scoreResult.classification });
+  return NextResponse.json({
+    ok: true,
+    finalScore: scoreResult.final100,
+    classification: scoreResult.classification,
+  });
 }
