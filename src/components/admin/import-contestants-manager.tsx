@@ -21,6 +21,7 @@ export function ImportContestantsManager() {
 
   async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
+
     setResult(null);
     setMessage(null);
 
@@ -46,12 +47,14 @@ export function ImportContestantsManager() {
       }
 
       const sheet = workbook.Sheets[sheetName];
+
       const rawRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, {
         defval: '',
         raw: false,
       });
 
       const mapped = mapExcelRowsToContestants(rawRows);
+
       setRows(mapped.contestants);
       setErrors(mapped.errors);
 
@@ -100,42 +103,59 @@ export function ImportContestantsManager() {
         <div className="card-surface card-gradient">
           <div className="card-header">
             <h2 className="card-title">Mẫu cột Excel</h2>
-            <p className="card-subtitle">Chỉ bắt buộc 2 cột: SBD và Họ và tên. Có thể thêm profile_text, portrait_url nếu cần.</p>
+            <p className="card-subtitle">
+              File import gồm 3 cột: Số báo danh, Họ và tên, Link video. Link video có thể là link Google Drive.
+            </p>
           </div>
+
           <div className="table-wrap compact-table">
             <table className="data-table">
               <thead>
                 <tr>
                   <th>SBD</th>
                   <th>Họ và tên</th>
-                  <th>profile_text</th>
-                  <th>portrait_url</th>
+                  <th>Link video</th>
                 </tr>
               </thead>
+
               <tbody>
                 <tr>
-                  <td className="strong-cell">001</td>
+                  <td className="strong-cell">TEST001</td>
                   <td>Nguyễn Văn A</td>
-                  <td>Sinh viên khoa Truyền thông...</td>
-                  <td>https://...</td>
+                  <td>https://drive.google.com/file/d/.../view?usp=sharing</td>
                 </tr>
               </tbody>
             </table>
+          </div>
+
+          <div className="alert alert-info" style={{ marginTop: 16 }}>
+            Trước khi import, hãy mở quyền video Google Drive ở chế độ: <strong>Anyone with the link can view</strong>.
           </div>
         </div>
 
         <div className="card-surface">
           <div className="card-header">
             <h2 className="card-title">Chọn file để import</h2>
-            <p className="card-subtitle">Bạn có thể thử trước với một file nhỏ để kiểm tra cấu trúc cột.</p>
+            <p className="card-subtitle">
+              Hỗ trợ .xlsx, .xls hoặc .csv. Hệ thống sẽ tự nhận các cột: SBD, Họ và tên, Link video.
+            </p>
           </div>
 
           <div className="field-group">
             <label className="field-label">File Excel</label>
-            <input type="file" accept=".xlsx,.xls,.csv" onChange={handleFileChange} className="input file-input" />
+            <input
+              type="file"
+              accept=".xlsx,.xls,.csv"
+              onChange={handleFileChange}
+              className="input file-input"
+            />
           </div>
 
-          {filename ? <div className="alert alert-info">Đang đọc file: <strong>{filename}</strong></div> : null}
+          {filename ? (
+            <div className="alert alert-info">
+              Đang đọc file: <strong>{filename}</strong>
+            </div>
+          ) : null}
 
           {errors.length ? (
             <div className="alert alert-warning">
@@ -149,18 +169,32 @@ export function ImportContestantsManager() {
           ) : null}
 
           <div className="inline-summary">
-            <div><strong>Số dòng hợp lệ:</strong> {rows.length}</div>
-            <button onClick={handleImport} disabled={importing || !rows.length || errors.length > 0} className="btn btn-primary">
+            <div>
+              <strong>Số dòng hợp lệ:</strong> {rows.length}
+            </div>
+
+            <button
+              onClick={handleImport}
+              disabled={importing || !rows.length || errors.length > 0}
+              className="btn btn-primary"
+            >
               {importing ? 'Đang import...' : 'Import vào hệ thống'}
             </button>
           </div>
 
           {message ? <div className="alert alert-info">{message}</div> : null}
+
           {result ? (
             <div className="alert alert-success">
-              <p><strong>Tổng dòng xử lý:</strong> {result.total}</p>
-              <p><strong>Thêm mới:</strong> {result.inserted}</p>
-              <p><strong>Cập nhật:</strong> {result.updated}</p>
+              <p>
+                <strong>Tổng dòng xử lý:</strong> {result.total}
+              </p>
+              <p>
+                <strong>Thêm mới:</strong> {result.inserted}
+              </p>
+              <p>
+                <strong>Cập nhật:</strong> {result.updated}
+              </p>
             </div>
           ) : null}
         </div>
@@ -169,36 +203,43 @@ export function ImportContestantsManager() {
       <section className="card-surface">
         <div className="card-header">
           <h2 className="card-title">Xem trước dữ liệu</h2>
-          <p className="card-subtitle">Hệ thống đang hiển thị tối đa 10 dòng đầu tiên để anh/chị kiểm tra nhanh.</p>
+          <p className="card-subtitle">
+            Hệ thống hiển thị tối đa 10 dòng đầu tiên để kiểm tra nhanh trước khi import.
+          </p>
         </div>
+
         <div className="table-wrap">
           <table className="data-table">
             <thead>
               <tr>
                 <th>SBD</th>
                 <th>Họ và tên</th>
-                <th>profile_text</th>
-                <th>portrait_url</th>
+                <th>Link video</th>
               </tr>
             </thead>
+
             <tbody>
               {previewRows.length ? (
                 previewRows.map((row) => (
                   <tr key={row.sbd}>
                     <td className="strong-cell">{row.sbd}</td>
                     <td>{row.full_name}</td>
-                    <td>{row.profile_text ?? ''}</td>
-                    <td>{row.portrait_url ?? ''}</td>
+                    <td style={{ maxWidth: 420, wordBreak: 'break-all' }}>
+                      {row.video_path ?? ''}
+                    </td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td className="empty-cell" colSpan={4}>Chưa có dữ liệu xem trước.</td>
+                  <td className="empty-cell" colSpan={3}>
+                    Chưa có dữ liệu xem trước.
+                  </td>
                 </tr>
               )}
             </tbody>
           </table>
         </div>
+
         {rows.length > 10 ? <p className="table-note">Đang hiển thị 10 dòng đầu tiên.</p> : null}
       </section>
     </div>
