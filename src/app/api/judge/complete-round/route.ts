@@ -69,10 +69,10 @@ async function countCompletedJudges(adminSupabase: any, roundKey: string) {
     throw new Error(error.message);
   }
 
-  return new Set((data || []).map((row: any) => row.judge_id)).size;
+  return new Set((data || []).map((row: any) => String(row.judge_id))).size;
 }
 
-async function getRound2ExpectedContestants(adminSupabase: any) {
+async function getRound2ExpectedContestants(adminSupabase: any): Promise<string[]> {
   const { data: pairs, error: pairsError } = await adminSupabase
     .from("round2_pairs")
     .select("id")
@@ -82,7 +82,7 @@ async function getRound2ExpectedContestants(adminSupabase: any) {
     throw new Error(pairsError.message);
   }
 
-  const pairIds = (pairs || []).map((pair: any) => pair.id);
+  const pairIds: string[] = (pairs || []).map((pair: any) => String(pair.id));
 
   if (pairIds.length === 0) {
     return [];
@@ -97,10 +97,12 @@ async function getRound2ExpectedContestants(adminSupabase: any) {
     throw new Error(membersError.message);
   }
 
-  return [...new Set((members || []).map((member: any) => member.contestant_id))];
+  return [...new Set((members || []).map((member: any) => String(member.contestant_id)))];
 }
 
-async function getRound3ExpectedContestantsByStage(adminSupabase: any) {
+async function getRound3ExpectedContestantsByStage(
+  adminSupabase: any
+): Promise<Record<string, string[]>> {
   const result: Record<string, string[]> = {
     round3_stage1: [],
     round3_stage2: [],
@@ -117,11 +119,14 @@ async function getRound3ExpectedContestantsByStage(adminSupabase: any) {
   }
 
   for (const row of data || []) {
-    if (!result[row.segment_id]) {
-      result[row.segment_id] = [];
+    const segmentId = String((row as any).segment_id);
+    const contestantId = String((row as any).contestant_id);
+
+    if (!result[segmentId]) {
+      result[segmentId] = [];
     }
 
-    result[row.segment_id].push(row.contestant_id);
+    result[segmentId].push(contestantId);
   }
 
   return result;
@@ -132,7 +137,7 @@ async function getSubmittedContestants(
   judgeId: string,
   segmentId: string,
   contestantIds: string[]
-) {
+): Promise<Set<string>> {
   if (contestantIds.length === 0) return new Set<string>();
 
   const { data, error } = await adminSupabase
@@ -147,7 +152,7 @@ async function getSubmittedContestants(
     throw new Error(error.message);
   }
 
-  return new Set((data || []).map((row: any) => row.contestant_id));
+  return new Set((data || []).map((row: any) => String(row.contestant_id)));
 }
 
 async function checkRound2Completeness(adminSupabase: any, judgeId: string) {
