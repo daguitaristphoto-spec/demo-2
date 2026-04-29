@@ -189,8 +189,8 @@ export default async function Round3ResultsPage() {
           <p className="eyebrow">Speak Up DNU 2026</p>
           <h1>Tổng hợp điểm vòng 3</h1>
           <p>
-            Vòng Chung kết gồm 3 chặng. Bảng dưới đây hiển thị điểm tạm tính theo số phiếu đã nộp.
-            Kết quả chính thức chỉ nên chốt khi đủ 5 giám khảo.
+            Vòng Chung kết gồm 3 chặng. Bảng dưới đây hiển thị điểm trung bình tạm tính
+            theo số phiếu đã nộp. Kết quả chính thức chỉ nên chốt khi đủ 5 giám khảo.
           </p>
         </div>
 
@@ -225,7 +225,7 @@ export default async function Round3ResultsPage() {
               : "Kết quả đang là tạm tính"}
           </h3>
           <p className="card-subtitle">
-            Hiện hệ thống đang tính trung bình theo số phiếu đã nộp. Nếu mới có 1 giám khảo test,
+            Hệ thống chỉ hiển thị điểm trung bình theo số phiếu đã nộp. Nếu mới có 1 giám khảo test,
             điểm trung bình chính là điểm của giám khảo đó. Không nên dùng bảng này để công bố giải
             cho đến khi đủ 5/5 giám khảo và admin chốt điểm chính thức.
           </p>
@@ -340,6 +340,7 @@ export default async function Round3ResultsPage() {
             <h3 className="card-title">{segment.label}</h3>
             <p className="card-subtitle">
               Bảng điểm riêng của {segment.label.toLowerCase()} theo số phiếu đã nộp.
+              Chỉ hiển thị điểm trung bình, không hiển thị điểm riêng từng giám khảo.
             </p>
           </div>
 
@@ -351,7 +352,6 @@ export default async function Round3ResultsPage() {
                   <th>SBD</th>
                   <th>Thí sinh</th>
                   <th>Số phiếu</th>
-                  <th>Điểm từng GK</th>
                   <th>Điểm TB tạm tính</th>
                 </tr>
               </thead>
@@ -366,11 +366,6 @@ export default async function Round3ResultsPage() {
                       <td className="strong-cell">{row.sbd}</td>
                       <td>{row.fullName}</td>
                       <td>{voteCount}/{REQUIRED_JUDGE_COUNT}</td>
-                      <td>
-                        {(row.stageScores[segment.id] || [])
-                          .map((score) => formatScore(score))
-                          .join(" | ")}
-                      </td>
                       <td className="strong-cell">
                         {formatScore(row.stageAverages[segment.id])}
                       </td>
@@ -380,7 +375,7 @@ export default async function Round3ResultsPage() {
 
                 {(stageRows[segment.id] || []).length === 0 ? (
                   <tr>
-                    <td colSpan={6} style={{ textAlign: "center", padding: 24 }}>
+                    <td colSpan={5} style={{ textAlign: "center", padding: 24 }}>
                       Chưa có phiếu chấm ở chặng này.
                     </td>
                   </tr>
