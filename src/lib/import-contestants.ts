@@ -1,6 +1,7 @@
 export type ContestantImportRow = {
   sbd: string;
   full_name: string;
+  video_path?: string;
   profile_text?: string;
   portrait_url?: string;
 };
@@ -22,8 +23,10 @@ function pickValue(row: Record<string, unknown>, acceptedHeaders: string[]) {
   }
 
   for (const header of acceptedHeaders) {
-    if (normalizedMap.has(normalizeHeader(header))) {
-      return normalizedMap.get(normalizeHeader(header));
+    const normalizedHeader = normalizeHeader(header);
+
+    if (normalizedMap.has(normalizedHeader)) {
+      return normalizedMap.get(normalizedHeader);
     }
   }
 
@@ -47,12 +50,72 @@ export function mapExcelRowsToContestants(rows: Record<string, unknown>[]) {
   rows.forEach((row, index) => {
     const lineNo = index + 2;
 
-    const sbd = toOptionalText(pickValue(row, ['sbd', 'so bao danh', 'stt du thi', 'ma thi sinh', 'ma so', 'số báo danh']));
-    const fullName = toOptionalText(pickValue(row, ['full_name', 'full name', 'ho va ten', 'họ và tên', 'ho ten', 'họ tên', 'ten thi sinh', 'tên thí sinh']));
-    const profileText = toOptionalText(pickValue(row, ['profile_text', 'profile', 'gioi thieu', 'giới thiệu', 'thong tin', 'thông tin']));
-    const portraitUrl = toOptionalText(pickValue(row, ['portrait_url', 'portrait', 'anh chan dung', 'ảnh chân dung', 'avatar', 'image', 'image_url']));
+    const sbd = toOptionalText(
+      pickValue(row, [
+        'sbd',
+        'so bao danh',
+        'số báo danh',
+        'stt du thi',
+        'ma thi sinh',
+        'mã thí sinh',
+        'ma so',
+        'mã số',
+      ])
+    );
 
-    if (!sbd && !fullName && !profileText && !portraitUrl) {
+    const fullName = toOptionalText(
+      pickValue(row, [
+        'full_name',
+        'full name',
+        'ho va ten',
+        'họ và tên',
+        'ho ten',
+        'họ tên',
+        'ten thi sinh',
+        'tên thí sinh',
+      ])
+    );
+
+    const videoPath = toOptionalText(
+      pickValue(row, [
+        'link video',
+        'video link',
+        'video',
+        'video_path',
+        'video path',
+        'google drive',
+        'link google drive',
+        'drive link',
+        'url video',
+        'duong dan video',
+        'đường dẫn video',
+      ])
+    );
+
+    const profileText = toOptionalText(
+      pickValue(row, [
+        'profile_text',
+        'profile',
+        'gioi thieu',
+        'giới thiệu',
+        'thong tin',
+        'thông tin',
+      ])
+    );
+
+    const portraitUrl = toOptionalText(
+      pickValue(row, [
+        'portrait_url',
+        'portrait',
+        'anh chan dung',
+        'ảnh chân dung',
+        'avatar',
+        'image',
+        'image_url',
+      ])
+    );
+
+    if (!sbd && !fullName && !videoPath && !profileText && !portraitUrl) {
       return;
     }
 
@@ -72,9 +135,11 @@ export function mapExcelRowsToContestants(rows: Record<string, unknown>[]) {
     }
 
     seenSbd.add(sbd);
+
     contestants.push({
       sbd,
       full_name: fullName,
+      ...(videoPath ? { video_path: videoPath } : {}),
       ...(profileText ? { profile_text: profileText } : {}),
       ...(portraitUrl ? { portrait_url: portraitUrl } : {}),
     });
