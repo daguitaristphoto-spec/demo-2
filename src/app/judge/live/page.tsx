@@ -92,14 +92,14 @@ export default function JudgeLiveScoringPage() {
     const totals: Record<string, number> = {};
 
     for (const member of selectedPair.members) {
-      const contestantId = member.contestant_id;
-      const contestantScores = pairScores[contestantId] || {};
+      const currentContestantId = member.contestant_id;
+      const contestantScores = pairScores[currentContestantId] || {};
 
       const total10 = criteria.reduce((sum, criterion) => {
         return sum + Number(contestantScores[criterion.id] || 0) * Number(criterion.weight);
       }, 0);
 
-      totals[contestantId] = Math.round(total10 * 10 * 100) / 100;
+      totals[currentContestantId] = Math.round(total10 * 10 * 100) / 100;
     }
 
     return totals;
@@ -211,10 +211,13 @@ export default function JudgeLiveScoringPage() {
     }
   }
 
-  async function loadRound2Pairs(nextSegmentId: string) {
+  async function loadRound2Pairs(nextSegmentId: string, keepCurrentPair = false) {
     setLoading(true);
-    setMessage("");
-    setPairId("");
+
+    if (!keepCurrentPair) {
+      setMessage("");
+      setPairId("");
+    }
 
     try {
       const res = await fetch(`/api/judge/round2-pairs?segmentId=${nextSegmentId}`);
@@ -302,7 +305,7 @@ export default function JudgeLiveScoringPage() {
   }
 
   function updatePairScore(
-    contestantId: string,
+    currentContestantId: string,
     criterionId: string,
     rawValue: string,
     maxScore: number
@@ -313,7 +316,7 @@ export default function JudgeLiveScoringPage() {
 
     setPairScores((prev) => {
       const nextContestantScores = {
-        ...(prev[contestantId] || {}),
+        ...(prev[currentContestantId] || {}),
       };
 
       if (normalizedValue === "") {
@@ -324,7 +327,7 @@ export default function JudgeLiveScoringPage() {
 
       return {
         ...prev,
-        [contestantId]: nextContestantScores,
+        [currentContestantId]: nextContestantScores,
       };
     });
   }
@@ -341,8 +344,8 @@ export default function JudgeLiveScoringPage() {
   function buildNumericPairScores() {
     const result: Record<string, Record<string, number>> = {};
 
-    for (const [contestantId, contestantScores] of Object.entries(pairScores)) {
-      result[contestantId] = Object.fromEntries(
+    for (const [currentContestantId, contestantScores] of Object.entries(pairScores)) {
+      result[currentContestantId] = Object.fromEntries(
         Object.entries(contestantScores).map(([criterionId, value]) => [
           criterionId,
           Number(value || 0),
@@ -442,7 +445,7 @@ export default function JudgeLiveScoringPage() {
         .join(" | ");
 
       setMessage(`Đã nộp điểm cặp ${selectedPair.pair_no}. ${scoreText}`);
-      loadRound2Pairs(segmentId);
+      loadRound2Pairs(segmentId, true);
     } catch {
       setMessage("Có lỗi khi nộp điểm cặp");
     } finally {
