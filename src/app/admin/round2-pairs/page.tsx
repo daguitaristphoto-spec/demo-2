@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 
 type Contestant = {
@@ -31,18 +31,6 @@ export default function Round2PairsPage() {
   const [tieBreak, setTieBreak] = useState<TieBreakInfo | null>(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
-
-  const usedContestantIds = useMemo(() => {
-    const ids = new Set<string>();
-
-    for (const pair of pairs) {
-      for (const contestantId of pair.contestantIds) {
-        if (contestantId) ids.add(contestantId);
-      }
-    }
-
-    return ids;
-  }, [pairs]);
 
   useEffect(() => {
     loadData();
@@ -113,22 +101,75 @@ export default function Round2PairsPage() {
     }
 
     setPairs(nextPairs);
+    setMessage("Đã tự ghép cặp theo thứ hạng. Bạn có thể chỉnh lại thủ công nếu cần.");
+  }
+
+  function findContestantLocation(
+    sourcePairs: PairForm[],
+    contestantId: string
+  ): { pairIndex: number; positionIndex: number } | null {
+    for (let pairIndex = 0; pairIndex < sourcePairs.length; pairIndex += 1) {
+      const positionIndex = sourcePairs[pairIndex].contestantIds.findIndex(
+        (id) => id === contestantId
+      );
+
+      if (positionIndex !== -1) {
+        return { pairIndex, positionIndex };
+      }
+    }
+
+    return null;
   }
 
   function updatePair(pairIndex: number, positionIndex: number, contestantId: string) {
-    setPairs((prev) =>
-      prev.map((pair, index) => {
-        if (index !== pairIndex) return pair;
+    setPairs((prev) => {
+      const nextPairs = prev.map((pair) => ({
+        ...pair,
+        contestantIds: [...pair.contestantIds],
+      }));
 
-        const nextContestantIds = [...pair.contestantIds];
-        nextContestantIds[positionIndex] = contestantId;
+      const oldContestantId = nextPairs[pairIndex].contestantIds[positionIndex] || "";
 
-        return {
-          ...pair,
-          contestantIds: nextContestantIds,
-        };
-      })
+      if (!contestantId) {
+        nextPairs[pairIndex].contestantIds[positionIndex] = "";
+        return nextPairs;
+      }
+
+      const existingLocation = findContestantLocation(nextPairs, contestantId);
+
+      const isSamePosition =
+        existingLocation &&
+        existingLocation.pairIndex === pairIndex &&
+        existingLocation.positionIndex === positionIndex;
+
+      if (existingLocation && !isSamePosition) {
+        nextPairs[existingLocation.pairIndex].contestantIds[
+          existingLocation.positionIndex
+        ] = oldContestantId;
+      }
+
+      nextPairs[pairIndex].contestantIds[positionIndex] = contestantId;
+
+      return nextPairs;
+    });
+  }
+
+  function clearCurrentPairs() {
+    if (tieBreak?.needsVote) {
+      setMessage("Cần chốt vote đồng điểm trước khi xóa hoặc ghép lại cặp vòng 2.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      "Bạn có chắc chắn muốn xóa lựa chọn ghép cặp hiện tại để ghép lại không?"
     );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setPairs([]);
+    setMessage("Đã xóa lựa chọn ghép cặp hiện tại. Bạn có thể thêm cặp hoặc tự ghép lại.");
   }
 
   function addPair() {
@@ -239,12 +280,20 @@ export default function Round2PairsPage() {
 
   return (
     <main style={{ maxWidth: 1100, margin: "0 auto", padding: 24 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 16, alignItems: "center" }}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          gap: 16,
+          alignItems: "center",
+        }}
+      >
         <div>
           <p className="eyebrow">Speak Up DNU 2026</p>
           <h1>Gán cặp vòng 2</h1>
           <p>
-            Hệ thống lấy tối đa 30 thí sinh có điểm cao nhất từ vòng 1. Admin ghép mỗi cặp gồm 2 thí sinh để giám khảo chấm đồng thời.
+            Hệ thống lấy tối đa 30 thí sinh có điểm cao nhất từ vòng 1. Admin ghép mỗi cặp gồm
+            2 thí sinh để giám khảo chấm đồng thời.
           </p>
         </div>
 
@@ -254,7 +303,14 @@ export default function Round2PairsPage() {
       </div>
 
       <section className="card-surface" style={{ marginTop: 24 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            gap: 12,
+            alignItems: "center",
+          }}
+        >
           <div>
             <h2 style={{ margin: 0 }}>Top thí sinh vòng 1</h2>
             <p style={{ marginTop: 6 }}>
@@ -273,7 +329,8 @@ export default function Round2PairsPage() {
 
         {topContestants.length === 0 ? (
           <p style={{ marginTop: 16 }}>
-            Chưa có dữ liệu top thí sinh vòng 1. Hãy nộp phiếu vòng 1 trước, sau đó quay lại trang này.
+            Chưa có dữ liệu top thí sinh vòng 1. Hãy nộp phiếu vòng 1 trước, sau đó quay lại
+            trang này.
           </p>
         ) : null}
 
@@ -295,12 +352,13 @@ export default function Round2PairsPage() {
             </p>
 
             <p>
-              Điểm ngưỡng: <strong>{Number(tieBreak.cutoffScore).toFixed(2)}</strong> · Số suất cần chọn:{" "}
-              <strong>{tieBreak.slotsToFill}</strong>
+              Điểm ngưỡng: <strong>{Number(tieBreak.cutoffScore).toFixed(2)}</strong> · Số
+              suất cần chọn: <strong>{tieBreak.slotsToFill}</strong>
             </p>
 
             <p>
-              Sau khi 5 giám khảo vote xong, admin vào trang quản lý vote để chốt kết quả. Sau đó quay lại trang này và bấm tải lại.
+              Sau khi 5 giám khảo vote xong, admin vào trang quản lý vote để chốt kết quả. Sau
+              đó quay lại trang này và bấm tải lại.
             </p>
 
             <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 12 }}>
@@ -323,21 +381,40 @@ export default function Round2PairsPage() {
           opacity: tieBreak?.needsVote ? 0.55 : 1,
         }}
       >
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            gap: 12,
+            alignItems: "center",
+          }}
+        >
           <div>
             <h2 style={{ margin: 0 }}>Danh sách cặp vòng 2</h2>
             <p style={{ marginTop: 6 }}>
-              Mỗi cặp gồm 2 thí sinh. Khi giám khảo chấm vòng 2, hệ thống sẽ hiển thị 2 cột điểm song song.
+              Mỗi cặp gồm 2 thí sinh. Khi giám khảo chấm vòng 2, hệ thống sẽ hiển thị 2 cột
+              điểm song song.
             </p>
           </div>
 
-          <button
-            className="btn btn-secondary"
-            onClick={addPair}
-            disabled={loading || Boolean(tieBreak?.needsVote)}
-          >
-            Thêm cặp
-          </button>
+          <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+            <button
+              className="btn btn-secondary"
+              onClick={addPair}
+              disabled={loading || Boolean(tieBreak?.needsVote)}
+            >
+              Thêm cặp
+            </button>
+
+            <button
+              className="btn btn-secondary"
+              type="button"
+              onClick={clearCurrentPairs}
+              disabled={loading || Boolean(tieBreak?.needsVote) || pairs.length === 0}
+            >
+              Xóa lựa chọn ghép cặp
+            </button>
+          </div>
         </div>
 
         {tieBreak?.needsVote ? (
@@ -356,7 +433,14 @@ export default function Round2PairsPage() {
                 padding: 16,
               }}
             >
-              <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  gap: 12,
+                  alignItems: "center",
+                }}
+              >
                 <h3 style={{ margin: 0 }}>Cặp {pair.pairNo}</h3>
 
                 <button
@@ -406,13 +490,21 @@ export default function Round2PairsPage() {
                         <option value="">-- Chọn thí sinh --</option>
 
                         {topContestants.map((contestant) => {
-                          const isUsedElsewhere =
-                            usedContestantIds.has(contestant.id) && contestant.id !== selectedId;
+                          const location = findContestantLocation(pairs, contestant.id);
+
+                          const locationText =
+                            location &&
+                            !(
+                              location.pairIndex === pairIndex &&
+                              location.positionIndex === positionIndex
+                            )
+                              ? ` - đang ở cặp ${location.pairIndex + 1}`
+                              : "";
 
                           return (
-                            <option key={contestant.id} value={contestant.id} disabled={isUsedElsewhere}>
+                            <option key={contestant.id} value={contestant.id}>
                               {getContestantLabel(contestant)}
-                              {isUsedElsewhere ? " - đã chọn" : ""}
+                              {locationText}
                             </option>
                           );
                         })}
@@ -425,7 +517,15 @@ export default function Round2PairsPage() {
           ))}
         </div>
 
-        <div style={{ marginTop: 24, display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+        <div
+          style={{
+            marginTop: 24,
+            display: "flex",
+            gap: 12,
+            alignItems: "center",
+            flexWrap: "wrap",
+          }}
+        >
           <button
             className="btn btn-primary"
             onClick={savePairs}
