@@ -59,6 +59,7 @@ async function parseRequest(req: Request) {
 
 function average(values: number[]) {
   if (values.length === 0) return null;
+
   return values.reduce((sum, value) => sum + value, 0) / values.length;
 }
 
@@ -73,7 +74,10 @@ function sortRankedRows(rows: RankedContestant[]) {
   });
 }
 
-async function getContestantsByIds(adminSupabase: any, contestantIds: string[]) {
+async function getContestantsByIds(
+  adminSupabase: any,
+  contestantIds: string[]
+) {
   if (contestantIds.length === 0) {
     return new Map<string, any>();
   }
@@ -87,12 +91,15 @@ async function getContestantsByIds(adminSupabase: any, contestantIds: string[]) 
     throw new Error(error.message);
   }
 
-  return new Map(
-    (data || []).map((contestant: any) => [String(contestant.id), contestant])
+  return new Map<string, any>(
+    (data || []).map((contestant: any) => [
+      String(contestant.id),
+      contestant,
+    ])
   );
 }
 
-async function getRound2ContestantIds(adminSupabase: any) {
+async function getRound2ContestantIds(adminSupabase: any): Promise<string[]> {
   const { data: pairs, error: pairsError } = await adminSupabase
     .from("round2_pairs")
     .select("id")
@@ -102,7 +109,7 @@ async function getRound2ContestantIds(adminSupabase: any) {
     throw new Error(pairsError.message);
   }
 
-  const pairIds = (pairs || []).map((pair: any) => pair.id);
+  const pairIds: string[] = (pairs || []).map((pair: any) => String(pair.id));
 
   if (pairIds.length === 0) {
     throw new Error("Chưa có dữ liệu ghép cặp vòng 2.");
@@ -117,8 +124,10 @@ async function getRound2ContestantIds(adminSupabase: any) {
     throw new Error(membersError.message);
   }
 
-  const contestantIds = Array.from(
-    new Set((members || []).map((member: any) => String(member.contestant_id)))
+  const contestantIds: string[] = Array.from(
+    new Set<string>(
+      (members || []).map((member: any) => String(member.contestant_id))
+    )
   );
 
   if (contestantIds.length === 0) {
@@ -128,7 +137,10 @@ async function getRound2ContestantIds(adminSupabase: any) {
   return contestantIds;
 }
 
-async function getSegmentContestantIds(adminSupabase: any, segmentIds: string[]) {
+async function getSegmentContestantIds(
+  adminSupabase: any,
+  segmentIds: string[]
+): Promise<Map<string, Set<string>>> {
   const { data, error } = await adminSupabase
     .from("segment_contestants")
     .select("segment_id, contestant_id")
@@ -241,6 +253,7 @@ async function getRound2RankedContestants(
     }
 
     const current = grouped.get(contestantId)!;
+
     current.scores.push(Number((sheet as any).total_score ?? 0));
 
     if ((sheet as any).judge_id) {
@@ -281,10 +294,17 @@ async function getStage12RankedContestants(
   const stageIds = ["round3_stage1", "round3_stage2"];
   const bySegment = await getSegmentContestantIds(adminSupabase, stageIds);
 
-  const stage1Ids = bySegment.get("round3_stage1") || new Set<string>();
-  const stage2Ids = bySegment.get("round3_stage2") || new Set<string>();
+  const stage1Ids: string[] = Array.from(
+    bySegment.get("round3_stage1") ?? new Set<string>()
+  );
 
-  const expectedContestantIds = Array.from(new Set([...stage1Ids, ...stage2Ids]));
+  const stage2Ids: string[] = Array.from(
+    bySegment.get("round3_stage2") ?? new Set<string>()
+  );
+
+  const expectedContestantIds: string[] = Array.from(
+    new Set<string>([...stage1Ids, ...stage2Ids].map(String))
+  );
 
   if (expectedContestantIds.length === 0) {
     throw new Error("Chưa có danh sách thí sinh vòng 3 chặng 1 và chặng 2.");
@@ -365,12 +385,18 @@ async function getStage12RankedContestants(
 
     if (segmentId === "round3_stage1") {
       current.stage1Scores.push(score);
-      if (judgeId) current.stage1JudgeIds.add(judgeId);
+
+      if (judgeId) {
+        current.stage1JudgeIds.add(judgeId);
+      }
     }
 
     if (segmentId === "round3_stage2") {
       current.stage2Scores.push(score);
-      if (judgeId) current.stage2JudgeIds.add(judgeId);
+
+      if (judgeId) {
+        current.stage2JudgeIds.add(judgeId);
+      }
     }
   }
 
@@ -460,7 +486,10 @@ async function promoteContestantsToSegments(
 
 export async function POST(req: Request) {
   const auth = await requireAdmin();
-  if ("error" in auth) return auth.error;
+
+  if ("error" in auth) {
+    return auth.error;
+  }
 
   const { user, adminSupabase } = auth;
   const body = await parseRequest(req);
@@ -490,8 +519,8 @@ export async function POST(req: Request) {
         );
       }
 
-      const contestantIds = resolved.qualifiedRows.map(
-        (row) => row.contestantId
+      const contestantIds: string[] = resolved.qualifiedRows.map((row) =>
+        String(row.contestantId)
       );
 
       await promoteContestantsToSegments(adminSupabase, contestantIds, [
@@ -526,8 +555,8 @@ export async function POST(req: Request) {
         );
       }
 
-      const contestantIds = resolved.qualifiedRows.map(
-        (row) => row.contestantId
+      const contestantIds: string[] = resolved.qualifiedRows.map((row) =>
+        String(row.contestantId)
       );
 
       await promoteContestantsToSegments(adminSupabase, contestantIds, [
