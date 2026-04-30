@@ -43,6 +43,7 @@ body {
   min-height: 100%;
   max-width: 100%;
   overflow-x: hidden;
+  overflow-y: auto;
 }
 
 body {
@@ -116,9 +117,23 @@ iframe {
   position: sticky;
   top: 0;
   align-self: start;
-  height: 100vh;
-  overflow: hidden;
+  max-height: 100vh;
+  overflow-y: auto;
+  overflow-x: hidden;
   min-width: 0;
+}
+
+.shell-sidebar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.shell-sidebar::-webkit-scrollbar-thumb {
+  background: rgba(247, 213, 140, 0.28);
+  border-radius: 999px;
+}
+
+.shell-sidebar::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 .shell-sidebar::before {
@@ -309,6 +324,7 @@ iframe {
 
 .shell-main {
   padding: 28px;
+  padding-bottom: 80px;
   position: relative;
   min-width: 0;
   width: 100%;
@@ -1078,7 +1094,9 @@ select option:hover {
 
   .shell-sidebar {
     position: relative;
+    max-height: none;
     height: auto;
+    overflow: visible;
     border-right: 0;
     border-bottom: 1px solid rgba(247, 213, 140, 0.12);
   }
@@ -1113,6 +1131,7 @@ select option:hover {
   .landing-shell,
   .auth-layout {
     padding: 16px;
+    padding-bottom: 60px;
   }
 
   .shell-sidebar,
