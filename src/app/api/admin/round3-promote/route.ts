@@ -485,7 +485,8 @@ export async function POST(req: Request) {
 
       if (resolved.tieBreak?.needsVote) {
         return NextResponse.redirect(
-          new URL("/admin/tie-breaks?created=round2_to_round3", req.url)
+          new URL("/admin/tie-breaks?created=round2_to_round3", req.url),
+          { status: 303 }
         );
       }
 
@@ -499,7 +500,8 @@ export async function POST(req: Request) {
       ]);
 
       return NextResponse.redirect(
-        new URL("/admin/round3-results?done=round2_to_stage12", req.url)
+        new URL("/admin/round3-results?done=round2_to_stage12", req.url),
+        { status: 303 }
       );
     }
 
@@ -519,7 +521,8 @@ export async function POST(req: Request) {
 
       if (resolved.tieBreak?.needsVote) {
         return NextResponse.redirect(
-          new URL("/admin/tie-breaks?created=round3_stage12_to_stage3", req.url)
+          new URL("/admin/tie-breaks?created=round3_stage12_to_stage3", req.url),
+          { status: 303 }
         );
       }
 
@@ -532,7 +535,8 @@ export async function POST(req: Request) {
       ]);
 
       return NextResponse.redirect(
-        new URL("/admin/round3-results?done=stage12_to_top3", req.url)
+        new URL("/admin/round3-results?done=stage12_to_top3", req.url),
+        { status: 303 }
       );
     }
 
