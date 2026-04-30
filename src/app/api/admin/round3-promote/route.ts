@@ -182,9 +182,9 @@ function formatMissingList(
     .slice(0, 12)
     .map(
       (row) =>
-        `${row.sbd || "-"} - ${row.fullName || "Không rõ tên"} (${row.segmentLabel}: ${
-          row.count
-        }/${REQUIRED_JUDGE_COUNT})`
+        `${row.sbd || "-"} - ${row.fullName || "Không rõ tên"} (${
+          row.segmentLabel
+        }: ${row.count}/${REQUIRED_JUDGE_COUNT})`
     )
     .join("; ");
 }
@@ -484,6 +484,13 @@ async function promoteContestantsToSegments(
   }
 }
 
+function redirectWithError(req: Request, message: string) {
+  const url = new URL("/admin/round3-results", req.url);
+  url.searchParams.set("error", message);
+
+  return NextResponse.redirect(url, { status: 303 });
+}
+
 export async function POST(req: Request) {
   const auth = await requireAdmin();
 
@@ -569,11 +576,11 @@ export async function POST(req: Request) {
       );
     }
 
-    return NextResponse.json({ error: "Action không hợp lệ" }, { status: 400 });
+    return redirectWithError(req, "Action không hợp lệ.");
   } catch (error: any) {
-    return NextResponse.json(
-      { error: error?.message || "Có lỗi khi chuyển vòng" },
-      { status: 500 }
+    return redirectWithError(
+      req,
+      error?.message || "Có lỗi khi chuyển vòng."
     );
   }
 }
