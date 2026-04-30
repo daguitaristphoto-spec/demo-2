@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { requireRole } from "@/lib/auth-guard";
+import { Round2UnlockButton } from "@/components/admin/round2-unlock-button";
 
 const REQUIRED_JUDGE_COUNT = 5;
+const ROUND3_QUALIFIED_LIMIT = 10;
 
 function pickRelation(value: any) {
   return Array.isArray(value) ? value[0] : value;
@@ -113,9 +115,10 @@ export default async function Round2ResultsPage() {
           <p className="eyebrow">Speak Up DNU 2026</p>
           <h1>Tổng hợp điểm vòng 2</h1>
           <p>
-            Bảng tổng hợp điểm vòng Bán kết - Vượt ải. Điểm hiển thị là điểm trung bình
-            của các giám khảo đã nộp phiếu. Khi đủ 5/5 giám khảo, đây là điểm trung bình
-            cộng của 5 giám khảo.
+            Bảng tổng hợp điểm vòng Bán kết - Vượt ải. Điểm hiển thị là điểm
+            trung bình của các giám khảo đã nộp phiếu. Khi đủ 5/5 giám khảo,
+            hệ thống sẽ xếp hạng theo điểm trung bình và lấy 10 thí sinh cao
+            nhất vào vòng 3.
           </p>
         </div>
 
@@ -131,6 +134,8 @@ export default async function Round2ResultsPage() {
           >
             Xuất phiếu PDF vòng 2
           </Link>
+
+          <Round2UnlockButton />
         </div>
       </div>
 
@@ -138,8 +143,8 @@ export default async function Round2ResultsPage() {
         <div className="card-header">
           <h3 className="card-title">Bảng xếp hạng vòng 2</h3>
           <p className="card-subtitle">
-            Tổng số thí sinh đã có điểm: {rows.length}. Bảng này chỉ hiển thị điểm trung bình,
-            không hiển thị điểm riêng từng giám khảo.
+            Tổng số thí sinh đã có điểm: {rows.length}. Bảng này chỉ hiển thị
+            điểm trung bình, không hiển thị điểm riêng từng giám khảo.
           </p>
         </div>
 
@@ -159,26 +164,35 @@ export default async function Round2ResultsPage() {
 
             <tbody>
               {rows.map((row, index) => {
+                const rank = index + 1;
                 const isComplete = row.totalJudges >= REQUIRED_JUDGE_COUNT;
+                const isQualified =
+                  isComplete && index < ROUND3_QUALIFIED_LIMIT;
 
                 return (
                   <tr key={row.contestantId}>
-                    <td className="strong-cell">{index + 1}</td>
+                    <td className="strong-cell">{rank}</td>
                     <td>{row.pairNo ? `Cặp ${row.pairNo}` : "-"}</td>
                     <td className="strong-cell">{row.sbd}</td>
                     <td>{row.fullName}</td>
                     <td>
                       {row.totalJudges}/{REQUIRED_JUDGE_COUNT}
                     </td>
-                    <td className="strong-cell">{formatScore(row.averageScore)}</td>
+                    <td className="strong-cell">
+                      {formatScore(row.averageScore)}
+                    </td>
                     <td>
-                      {isComplete ? (
-                        <span style={{ fontWeight: 700, color: "#86efac" }}>
-                          Đủ 5 GK
-                        </span>
-                      ) : (
+                      {!isComplete ? (
                         <span style={{ fontWeight: 700, color: "#fbbf24" }}>
                           Tạm tính
+                        </span>
+                      ) : isQualified ? (
+                        <span style={{ fontWeight: 700, color: "#86efac" }}>
+                          Vào vòng 3
+                        </span>
+                      ) : (
+                        <span style={{ fontWeight: 700, color: "#94a3b8" }}>
+                          Dừng tại vòng 2
                         </span>
                       )}
                     </td>
