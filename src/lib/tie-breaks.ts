@@ -54,7 +54,10 @@ function sortRows(rows: RankedContestant[]) {
       return scoreDiff;
     }
 
-    return String(a.sbd || "").localeCompare(String(b.sbd || ""), "vi");
+    return String(a.sbd || "").localeCompare(String(b.sbd || ""), "vi", {
+      numeric: true,
+      sensitivity: "base",
+    });
   });
 }
 
@@ -64,6 +67,14 @@ function sameSet(a: string[], b: string[]) {
   const setA = new Set(a.map(String));
 
   return b.every((item) => setA.has(String(item)));
+}
+
+function buildCandidateRows(sessionId: string, candidates: RankedContestant[]) {
+  return candidates.map((candidate) => ({
+    session_id: sessionId,
+    contestant_id: candidate.contestantId,
+    source_score: normalizeScore(candidate.score),
+  }));
 }
 
 async function findMatchingClosedSession(
@@ -129,16 +140,52 @@ async function findMatchingClosedSession(
 async function findOpenSession(adminSupabase: any, transitionKey: TransitionKey) {
   const { data, error } = await adminSupabase
     .from("tie_break_sessions")
-    .select("id, title, description, cutoff_score, slots_to_fill")
+    .select(
+      "id, title, description, cutoff_score, slots_to_fill, cutoff_rank, slots_available, status, created_at"
+    )
     .eq("transition_key", transitionKey)
     .eq("status", "open")
-    .maybeSingle();
+    .order("created_at", { ascending: false })
+    .limit(1);
 
   if (error) {
     throw new Error(error.message);
   }
 
-  return data || null;
+  return data?.[0] || null;
+}
+
+async function ensureCandidatesExist({
+  adminSupabase,
+  sessionId,
+  candidates,
+}: {
+  adminSupabase: any;
+  sessionId: string;
+  candidates: RankedContestant[];
+}) {
+  const { data: existingCandidates, error: existingError } = await adminSupabase
+    .from("tie_break_candidates")
+    .select("contestant_id")
+    .eq("session_id", sessionId);
+
+  if (existingError) {
+    throw new Error(existingError.message);
+  }
+
+  if ((existingCandidates || []).length > 0) {
+    return;
+  }
+
+  const candidateRows = buildCandidateRows(sessionId, candidates);
+
+  const { error: candidatesError } = await adminSupabase
+    .from("tie_break_candidates")
+    .insert(candidateRows);
+
+  if (candidatesError) {
+    throw new Error(candidatesError.message);
+  }
 }
 
 async function createOpenSession({
@@ -147,6 +194,7 @@ async function createOpenSession({
   title,
   description,
   cutoffScore,
+  cutoffRank,
   slotsToFill,
   candidates,
   createdBy,
@@ -156,6 +204,7 @@ async function createOpenSession({
   title: string;
   description: string;
   cutoffScore: number;
+  cutoffRank: number;
   slotsToFill: number;
   candidates: RankedContestant[];
   createdBy?: string | null;
@@ -163,6 +212,12 @@ async function createOpenSession({
   const existingOpenSession = await findOpenSession(adminSupabase, transitionKey);
 
   if (existingOpenSession?.id) {
+    await ensureCandidatesExist({
+      adminSupabase,
+      sessionId: existingOpenSession.id,
+      candidates,
+    });
+
     return existingOpenSession;
   }
 
@@ -173,30 +228,26 @@ async function createOpenSession({
       title,
       description,
       cutoff_score: cutoffScore,
+      cutoff_rank: cutoffRank,
       slots_to_fill: slotsToFill,
+      slots_available: slotsToFill,
       created_by: createdBy || null,
       status: "open",
     })
-    .select("id, title, description, cutoff_score, slots_to_fill")
+    .select(
+      "id, title, description, cutoff_score, slots_to_fill, cutoff_rank, slots_available"
+    )
     .single();
 
   if (sessionError || !session) {
     throw new Error(sessionError?.message || "Không tạo được phiên vote đồng điểm");
   }
 
-  const candidateRows = candidates.map((candidate) => ({
-    session_id: session.id,
-    contestant_id: candidate.contestantId,
-    source_score: normalizeScore(candidate.score),
-  }));
-
-  const { error: candidatesError } = await adminSupabase
-    .from("tie_break_candidates")
-    .insert(candidateRows);
-
-  if (candidatesError) {
-    throw new Error(candidatesError.message);
-  }
+  await ensureCandidatesExist({
+    adminSupabase,
+    sessionId: session.id,
+    candidates,
+  });
 
   return session;
 }
@@ -272,6 +323,7 @@ export async function resolveTopWithTie({
     title,
     description,
     cutoffScore,
+    cutoffRank: topN,
     slotsToFill,
     candidates: tiedRows,
     createdBy,
