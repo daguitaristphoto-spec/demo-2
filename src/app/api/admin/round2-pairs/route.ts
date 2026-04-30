@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { resolveTopWithTie, type RankedContestant } from "@/lib/tie-breaks";
 
 function pickRelation(value: any) {
   return Array.isArray(value) ? value[0] : value;
@@ -40,25 +41,9 @@ async function requireAdmin() {
   return { user, profile, adminSupabase };
 }
 
-type RankedContestant = {
-  contestantId: string;
-  sbd: string;
-  fullName: string;
-  score: number;
-};
-
 function isRound1Sheet(sheet: any) {
   const segmentId = String(sheet.segment_id || "").trim();
 
-  /*
-    Hỗ trợ nhiều cách đặt tên segment vòng 1:
-    - round1
-    - round1_online
-    - preliminary
-    - so_loai
-    - so-loai
-    - null/empty và chưa thuộc pair vòng 2
-  */
   const round1SegmentIds = new Set([
     "round1",
     "round1_online",
@@ -101,10 +86,6 @@ async function getRound1RankedContestants(adminSupabase: any): Promise<RankedCon
   const allSubmittedSheets = sheets || [];
   let round1Sheets = allSubmittedSheets.filter(isRound1Sheet);
 
-  /*
-    Trường hợp dữ liệu cũ có segment_id khác nhưng vòng 2 chưa chấm:
-    nếu lọc round1 không ra gì, lấy các phiếu submitted chưa gắn pair_id.
-  */
   if (round1Sheets.length === 0) {
     round1Sheets = allSubmittedSheets.filter((sheet: any) => !sheet.pair_id);
   }
@@ -138,10 +119,6 @@ async function getRound1RankedContestants(adminSupabase: any): Promise<RankedCon
 
   return Array.from(grouped.values())
     .map((row) => {
-      /*
-        Vòng 1 của bạn mỗi thí sinh chỉ có 1 giám khảo chấm.
-        Nếu sau này lỡ có nhiều phiếu cho cùng 1 thí sinh, lấy trung bình để an toàn.
-      */
       const total = row.scores.reduce((sum, score) => sum + score, 0);
       const average = row.scores.length > 0 ? total / row.scores.length : 0;
 
@@ -166,18 +143,24 @@ export async function GET() {
   const auth = await requireAdmin();
   if ("error" in auth) return auth.error;
 
-  const { adminSupabase } = auth;
+  const { user, adminSupabase } = auth;
   const segmentId = "round2_semifinal";
 
   try {
     const rankedRows = await getRound1RankedContestants(adminSupabase);
 
-    /*
-      Lấy tối đa 30 thí sinh vào vòng 2.
-      Tạm thời không gọi tie-break để tránh lỗi bảng tie_break_sessions thiếu cột title.
-      Nếu đồng điểm, hệ thống sắp theo SBD tăng dần.
-    */
-    const topContestants = rankedRows.slice(0, 30).map((row) => ({
+    const resolvedTop30 = await resolveTopWithTie({
+      adminSupabase,
+      transitionKey: "round1_to_round2",
+      title: "Vote chọn thí sinh vào vòng 2",
+      description:
+        "Có thí sinh đồng điểm ở ngưỡng Top 30 vòng 1. Giám khảo vote để chọn thí sinh đi tiếp vào vòng 2.",
+      topN: 30,
+      rows: rankedRows,
+      createdBy: user.id,
+    });
+
+    const topContestants = resolvedTop30.qualifiedRows.map((row) => ({
       id: row.contestantId,
       sbd: row.sbd,
       full_name: row.fullName,
@@ -254,7 +237,7 @@ export async function GET() {
     return NextResponse.json({
       topContestants,
       pairs: normalizedPairs,
-      tieBreak: null,
+      tieBreak: resolvedTop30.tieBreak,
     });
   } catch (error: any) {
     return NextResponse.json(
@@ -311,12 +294,6 @@ export async function POST(req: Request) {
     }
   }
 
-  /*
-    Xóa dữ liệu cặp cũ an toàn:
-    1. Lấy các pair cũ của vòng 2
-    2. Xóa members trước
-    3. Xóa pairs sau
-  */
   const { data: existingPairs, error: existingPairsError } = await adminSupabase
     .from("round2_pairs")
     .select("id")
