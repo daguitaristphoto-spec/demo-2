@@ -38,20 +38,127 @@ function isCompleteJudgeCount(count: number) {
   return count >= REQUIRED_JUDGE_COUNT;
 }
 
+function sortBySbd(a: ContestantSummary, b: ContestantSummary) {
+  return String(a.sbd || "").localeCompare(String(b.sbd || ""), "vi", {
+    numeric: true,
+    sensitivity: "base",
+  });
+}
+
+function sortByScoreThenSbd(
+  scoreA: number | null,
+  scoreB: number | null,
+  rowA: ContestantSummary,
+  rowB: ContestantSummary
+) {
+  if (scoreA !== null && scoreB !== null && scoreB !== scoreA) {
+    return scoreB - scoreA;
+  }
+
+  if (scoreA !== null && scoreB === null) return -1;
+  if (scoreA === null && scoreB !== null) return 1;
+
+  return sortBySbd(rowA, rowB);
+}
+
 type ContestantSummary = {
   contestantId: string;
   sbd: string;
   fullName: string;
+  stageMembership: Record<string, boolean>;
   stageScores: Record<string, number[]>;
   stageAverages: Record<string, number | null>;
   afterStage2Total: number | null;
   finalTotal: number | null;
 };
 
+function createEmptyContestantSummary(
+  contestantId: string,
+  sbd: string,
+  fullName: string
+): ContestantSummary {
+  return {
+    contestantId,
+    sbd,
+    fullName,
+    stageMembership: {
+      round3_stage1: false,
+      round3_stage2: false,
+      round3_stage3: false,
+    },
+    stageScores: {
+      round3_stage1: [],
+      round3_stage2: [],
+      round3_stage3: [],
+    },
+    stageAverages: {
+      round3_stage1: null,
+      round3_stage2: null,
+      round3_stage3: null,
+    },
+    afterStage2Total: null,
+    finalTotal: null,
+  };
+}
+
 export default async function Round3ResultsPage() {
   const { supabase } = await requireRole("admin");
 
   const segmentIds = ROUND3_SEGMENTS.map((item) => item.id);
+
+  const { data: segmentContestants, error: segmentContestantsError } =
+    await supabase
+      .from("segment_contestants")
+      .select("segment_id, contestant_id")
+      .in("segment_id", segmentIds);
+
+  if (segmentContestantsError) {
+    return (
+      <main style={{ maxWidth: 1100, margin: "0 auto", padding: 24 }}>
+        <h1>Tổng hợp điểm vòng 3</h1>
+        <p style={{ color: "red" }}>{segmentContestantsError.message}</p>
+
+        <Link href="/admin/results" className="btn btn-secondary">
+          Quay lại kết quả
+        </Link>
+      </main>
+    );
+  }
+
+  const segmentContestantIds: string[] = Array.from(
+    new Set(
+      (segmentContestants || []).map((row: any) => String(row.contestant_id))
+    )
+  );
+
+  let contestantsById = new Map<string, any>();
+
+  if (segmentContestantIds.length > 0) {
+    const { data: contestants, error: contestantsError } = await supabase
+      .from("contestants")
+      .select("id, sbd, full_name")
+      .in("id", segmentContestantIds);
+
+    if (contestantsError) {
+      return (
+        <main style={{ maxWidth: 1100, margin: "0 auto", padding: 24 }}>
+          <h1>Tổng hợp điểm vòng 3</h1>
+          <p style={{ color: "red" }}>{contestantsError.message}</p>
+
+          <Link href="/admin/results" className="btn btn-secondary">
+            Quay lại kết quả
+          </Link>
+        </main>
+      );
+    }
+
+    contestantsById = new Map(
+      (contestants || []).map((contestant: any) => [
+        String(contestant.id),
+        contestant,
+      ])
+    );
+  }
 
   const { data: sheets, error } = await supabase
     .from("score_sheets")
@@ -85,34 +192,50 @@ export default async function Round3ResultsPage() {
 
   const grouped = new Map<string, ContestantSummary>();
 
-  for (const sheet of sheets ?? []) {
-    const contestant = pickRelation((sheet as any).contestant);
+  for (const row of segmentContestants || []) {
+    const segmentId = String((row as any).segment_id);
+    const contestantId = String((row as any).contestant_id);
+    const contestant = contestantsById.get(contestantId);
 
-    if (!contestant?.id) continue;
+    if (!contestant) continue;
 
-    if (!grouped.has(contestant.id)) {
-      grouped.set(contestant.id, {
-        contestantId: contestant.id,
-        sbd: contestant.sbd,
-        fullName: contestant.full_name,
-        stageScores: {
-          round3_stage1: [],
-          round3_stage2: [],
-          round3_stage3: [],
-        },
-        stageAverages: {
-          round3_stage1: null,
-          round3_stage2: null,
-          round3_stage3: null,
-        },
-        afterStage2Total: null,
-        finalTotal: null,
-      });
+    if (!grouped.has(contestantId)) {
+      grouped.set(
+        contestantId,
+        createEmptyContestantSummary(
+          contestantId,
+          contestant.sbd || "",
+          contestant.full_name || ""
+        )
+      );
     }
 
-    const current = grouped.get(contestant.id)!;
+    const current = grouped.get(contestantId)!;
+    current.stageMembership[segmentId] = true;
+  }
+
+  for (const sheet of sheets ?? []) {
+    const contestant = pickRelation((sheet as any).contestant);
+    const contestantId = String((sheet as any).contestant_id);
     const segmentId = String((sheet as any).segment_id);
     const score = Number((sheet as any).total_score ?? 0);
+
+    if (!contestantId) continue;
+
+    if (!grouped.has(contestantId)) {
+      grouped.set(
+        contestantId,
+        createEmptyContestantSummary(
+          contestantId,
+          contestant?.sbd || "",
+          contestant?.full_name || ""
+        )
+      );
+    }
+
+    const current = grouped.get(contestantId)!;
+
+    current.stageMembership[segmentId] = true;
 
     if (!current.stageScores[segmentId]) {
       current.stageScores[segmentId] = [];
@@ -146,23 +269,49 @@ export default async function Round3ResultsPage() {
     };
   });
 
+  const round3Entrants = [...rows]
+    .filter(
+      (row) =>
+        row.stageMembership.round3_stage1 ||
+        row.stageMembership.round3_stage2
+    )
+    .sort(sortBySbd);
+
   const afterStage2Rows = [...rows]
-    .filter((row) => row.afterStage2Total !== null)
-    .sort((a, b) => Number(b.afterStage2Total) - Number(a.afterStage2Total));
+    .filter(
+      (row) =>
+        row.stageMembership.round3_stage1 ||
+        row.stageMembership.round3_stage2 ||
+        row.afterStage2Total !== null
+    )
+    .sort((a, b) =>
+      sortByScoreThenSbd(a.afterStage2Total, b.afterStage2Total, a, b)
+    );
 
   const finalRows = [...rows]
-    .filter((row) => row.finalTotal !== null)
-    .sort((a, b) => Number(b.finalTotal) - Number(a.finalTotal));
+    .filter(
+      (row) =>
+        row.stageMembership.round3_stage3 ||
+        row.finalTotal !== null
+    )
+    .sort((a, b) => sortByScoreThenSbd(a.finalTotal, b.finalTotal, a, b));
 
   const stageRows: Record<string, ContestantSummary[]> = Object.fromEntries(
     ROUND3_SEGMENTS.map((segment) => [
       segment.id,
       [...rows]
-        .filter((row) => row.stageAverages[segment.id] !== null)
-        .sort(
-          (a, b) =>
-            Number(b.stageAverages[segment.id]) -
-            Number(a.stageAverages[segment.id])
+        .filter(
+          (row) =>
+            row.stageMembership[segment.id] ||
+            row.stageAverages[segment.id] !== null
+        )
+        .sort((a, b) =>
+          sortByScoreThenSbd(
+            a.stageAverages[segment.id],
+            b.stageAverages[segment.id],
+            a,
+            b
+          )
         ),
     ])
   );
@@ -171,7 +320,8 @@ export default async function Round3ResultsPage() {
     finalRows.length > 0 &&
     finalRows.every((row) =>
       ROUND3_SEGMENTS.every(
-        (segment) => (row.stageScores[segment.id]?.length ?? 0) >= REQUIRED_JUDGE_COUNT
+        (segment) =>
+          (row.stageScores[segment.id]?.length ?? 0) >= REQUIRED_JUDGE_COUNT
       )
     );
 
@@ -189,8 +339,8 @@ export default async function Round3ResultsPage() {
           <p className="eyebrow">Speak Up DNU 2026</p>
           <h1>Tổng hợp điểm vòng 3</h1>
           <p>
-            Vòng Chung kết gồm 3 chặng. Bảng dưới đây hiển thị điểm trung bình tạm tính
-            theo số phiếu đã nộp. Kết quả chính thức chỉ nên chốt khi đủ 5 giám khảo.
+            Vòng Chung kết gồm 3 chặng. Bảng dưới đây hiển thị danh sách thí sinh
+            đã vào vòng 3 và điểm trung bình tạm tính theo số phiếu đã nộp.
           </p>
         </div>
 
@@ -225,9 +375,8 @@ export default async function Round3ResultsPage() {
               : "Kết quả đang là tạm tính"}
           </h3>
           <p className="card-subtitle">
-            Hệ thống chỉ hiển thị điểm trung bình theo số phiếu đã nộp. Nếu mới có 1 giám khảo test,
-            điểm trung bình chính là điểm của giám khảo đó. Không nên dùng bảng này để công bố giải
-            cho đến khi đủ 5/5 giám khảo và admin chốt điểm chính thức.
+            Hệ thống hiển thị cả thí sinh đã được đưa vào vòng 3 nhưng chưa có phiếu chấm.
+            Khi chưa chấm, điểm sẽ hiển thị là dấu "-".
           </p>
         </div>
       </section>
@@ -236,8 +385,9 @@ export default async function Round3ResultsPage() {
         <div className="card-header">
           <h3 className="card-title">Thao tác chuyển chặng</h3>
           <p className="card-subtitle">
-            Sau khi chấm xong vòng 2, bấm nút đầu để lấy 10 thí sinh có điểm cao nhất vòng 2 vào vòng 3 chặng 1 và chặng 2.
-            Sau khi chấm xong chặng 1 + 2, bấm nút thứ hai để lấy Top 3 vào chặng 3.
+            Sau khi chấm xong vòng 2, bấm nút đầu để lấy 10 thí sinh có điểm cao nhất vòng 2
+            vào vòng 3 chặng 1 và chặng 2. Sau khi chấm xong chặng 1 + 2, bấm nút thứ hai
+            để lấy Top 3 vào chặng 3.
           </p>
         </div>
 
@@ -262,9 +412,80 @@ export default async function Round3ResultsPage() {
 
       <section className="card-surface" style={{ marginTop: 24 }}>
         <div className="card-header">
+          <h3 className="card-title">Danh sách thí sinh đã vào vòng 3</h3>
+          <p className="card-subtitle">
+            Tổng số thí sinh đã được đưa vào vòng 3: {round3Entrants.length}.
+            Danh sách này lấy từ bảng phân chặng, nên vẫn hiển thị dù chưa có điểm chấm.
+          </p>
+        </div>
+
+        <div className="table-wrap">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>STT</th>
+                <th>SBD</th>
+                <th>Thí sinh</th>
+                <th>Chặng 1</th>
+                <th>Chặng 2</th>
+                <th>Phiếu chặng 1</th>
+                <th>Phiếu chặng 2</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {round3Entrants.map((row, index) => {
+                const stage1Count = row.stageScores.round3_stage1?.length ?? 0;
+                const stage2Count = row.stageScores.round3_stage2?.length ?? 0;
+
+                return (
+                  <tr key={`entrant-${row.contestantId}`}>
+                    <td className="strong-cell">{index + 1}</td>
+                    <td className="strong-cell">{row.sbd}</td>
+                    <td>{row.fullName}</td>
+                    <td>
+                      {row.stageMembership.round3_stage1 ? (
+                        <span style={{ color: "#86efac", fontWeight: 700 }}>
+                          Đã mở
+                        </span>
+                      ) : (
+                        "-"
+                      )}
+                    </td>
+                    <td>
+                      {row.stageMembership.round3_stage2 ? (
+                        <span style={{ color: "#86efac", fontWeight: 700 }}>
+                          Đã mở
+                        </span>
+                      ) : (
+                        "-"
+                      )}
+                    </td>
+                    <td>{stage1Count}/{REQUIRED_JUDGE_COUNT}</td>
+                    <td>{stage2Count}/{REQUIRED_JUDGE_COUNT}</td>
+                  </tr>
+                );
+              })}
+
+              {round3Entrants.length === 0 ? (
+                <tr>
+                  <td colSpan={7} style={{ textAlign: "center", padding: 24 }}>
+                    Chưa có thí sinh nào được đưa vào vòng 3. Hãy bấm nút
+                    "Lấy Top 10 từ vòng 2 vào vòng 3".
+                  </td>
+                </tr>
+              ) : null}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section className="card-surface" style={{ marginTop: 24 }}>
+        <div className="card-header">
           <h3 className="card-title">Xếp hạng tạm thời sau chặng 1 + chặng 2</h3>
           <p className="card-subtitle">
-            Bảng này dùng để theo dõi tạm thời. Chỉ dùng để chọn Top 3 khi đủ phiếu của 5 giám khảo.
+            Bảng này dùng để theo dõi tạm thời. Khi chưa có điểm, hệ thống vẫn hiển thị
+            thí sinh nhưng điểm sẽ là "-".
           </p>
         </div>
 
@@ -289,30 +510,39 @@ export default async function Round3ResultsPage() {
                 const stage1Count = row.stageScores.round3_stage1?.length ?? 0;
                 const stage2Count = row.stageScores.round3_stage2?.length ?? 0;
                 const enoughVotes =
-                  isCompleteJudgeCount(stage1Count) && isCompleteJudgeCount(stage2Count);
+                  isCompleteJudgeCount(stage1Count) &&
+                  isCompleteJudgeCount(stage2Count);
 
                 return (
                   <tr
-                    key={row.contestantId}
+                    key={`after-stage2-${row.contestantId}`}
                     style={{
                       background:
-                        index < 3 ? "rgba(22, 163, 74, 0.18)" : "transparent",
+                        row.afterStage2Total !== null && index < 3
+                          ? "rgba(22, 163, 74, 0.18)"
+                          : "transparent",
                     }}
                   >
-                    <td className="strong-cell">{index + 1}</td>
+                    <td className="strong-cell">
+                      {row.afterStage2Total !== null ? index + 1 : "-"}
+                    </td>
                     <td className="strong-cell">{row.sbd}</td>
                     <td>{row.fullName}</td>
                     <td>{formatScore(row.stageAverages.round3_stage1)}</td>
                     <td>{stage1Count}/{REQUIRED_JUDGE_COUNT}</td>
                     <td>{formatScore(row.stageAverages.round3_stage2)}</td>
                     <td>{stage2Count}/{REQUIRED_JUDGE_COUNT}</td>
-                    <td className="strong-cell">{formatScore(row.afterStage2Total)}</td>
+                    <td className="strong-cell">
+                      {formatScore(row.afterStage2Total)}
+                    </td>
                     <td>
-                      {enoughVotes
-                        ? index < 3
-                          ? "Top 3 vào chặng 3"
-                          : "-"
-                        : "Tạm tính"}
+                      {row.afterStage2Total === null
+                        ? "Chưa đủ dữ liệu"
+                        : enoughVotes
+                          ? index < 3
+                            ? "Top 3 vào chặng 3"
+                            : "-"
+                          : "Tạm tính"}
                     </td>
                   </tr>
                 );
@@ -321,7 +551,7 @@ export default async function Round3ResultsPage() {
               {afterStage2Rows.length === 0 ? (
                 <tr>
                   <td colSpan={9} style={{ textAlign: "center", padding: 24 }}>
-                    Chưa có đủ dữ liệu chặng 1 và chặng 2.
+                    Chưa có thí sinh ở vòng 3 chặng 1 và chặng 2.
                   </td>
                 </tr>
               ) : null}
@@ -340,7 +570,7 @@ export default async function Round3ResultsPage() {
             <h3 className="card-title">{segment.label}</h3>
             <p className="card-subtitle">
               Bảng điểm riêng của {segment.label.toLowerCase()} theo số phiếu đã nộp.
-              Chỉ hiển thị điểm trung bình, không hiển thị điểm riêng từng giám khảo.
+              Nếu đã mở chặng nhưng chưa chấm, thí sinh vẫn được hiển thị với số phiếu 0/5.
             </p>
           </div>
 
@@ -359,10 +589,11 @@ export default async function Round3ResultsPage() {
               <tbody>
                 {(stageRows[segment.id] || []).map((row, index) => {
                   const voteCount = row.stageScores[segment.id]?.length ?? 0;
+                  const hasScore = row.stageAverages[segment.id] !== null;
 
                   return (
                     <tr key={`${segment.id}-${row.contestantId}`}>
-                      <td className="strong-cell">{index + 1}</td>
+                      <td className="strong-cell">{hasScore ? index + 1 : "-"}</td>
                       <td className="strong-cell">{row.sbd}</td>
                       <td>{row.fullName}</td>
                       <td>{voteCount}/{REQUIRED_JUDGE_COUNT}</td>
@@ -376,7 +607,7 @@ export default async function Round3ResultsPage() {
                 {(stageRows[segment.id] || []).length === 0 ? (
                   <tr>
                     <td colSpan={5} style={{ textAlign: "center", padding: 24 }}>
-                      Chưa có phiếu chấm ở chặng này.
+                      Chưa có thí sinh hoặc phiếu chấm ở chặng này.
                     </td>
                   </tr>
                 ) : null}
@@ -425,17 +656,21 @@ export default async function Round3ResultsPage() {
                   isCompleteJudgeCount(stage3Count);
 
                 const prize =
-                  enoughVotes && index === 0
-                    ? "Giải Nhất"
-                    : enoughVotes && index === 1
-                      ? "Giải Nhì"
-                      : enoughVotes && index === 2
-                        ? "Giải Ba"
-                        : "Chưa chốt";
+                  row.finalTotal === null
+                    ? "Chưa đủ dữ liệu"
+                    : enoughVotes && index === 0
+                      ? "Giải Nhất"
+                      : enoughVotes && index === 1
+                        ? "Giải Nhì"
+                        : enoughVotes && index === 2
+                          ? "Giải Ba"
+                          : "Chưa chốt";
 
                 return (
                   <tr key={`final-${row.contestantId}`}>
-                    <td className="strong-cell">{index + 1}</td>
+                    <td className="strong-cell">
+                      {row.finalTotal !== null ? index + 1 : "-"}
+                    </td>
                     <td className="strong-cell">{row.sbd}</td>
                     <td>{row.fullName}</td>
                     <td>{formatScore(row.stageAverages.round3_stage1)}</td>
@@ -453,7 +688,7 @@ export default async function Round3ResultsPage() {
               {finalRows.length === 0 ? (
                 <tr>
                   <td colSpan={11} style={{ textAlign: "center", padding: 24 }}>
-                    Chưa có đủ dữ liệu chặng 3 để xếp hạng chung cuộc.
+                    Chưa có Top 3 ở chặng 3 để xếp hạng chung cuộc.
                   </td>
                 </tr>
               ) : null}
