@@ -70,11 +70,17 @@ function sameSet(a: string[], b: string[]) {
 }
 
 function buildCandidateRows(sessionId: string, candidates: RankedContestant[]) {
-  return candidates.map((candidate) => ({
-    session_id: sessionId,
-    contestant_id: candidate.contestantId,
-    source_score: normalizeScore(candidate.score),
-  }));
+  return candidates.map((candidate) => {
+    const score = normalizeScore(candidate.score);
+
+    return {
+      session_id: sessionId,
+      contestant_id: candidate.contestantId,
+      source_score: score,
+      base_score: score,
+      selected: false,
+    };
+  });
 }
 
 async function findMatchingClosedSession(
@@ -155,7 +161,7 @@ async function findOpenSession(adminSupabase: any, transitionKey: TransitionKey)
   return data?.[0] || null;
 }
 
-async function ensureCandidatesExist({
+async function ensureCandidatesCorrect({
   adminSupabase,
   sessionId,
   candidates,
@@ -173,8 +179,25 @@ async function ensureCandidatesExist({
     throw new Error(existingError.message);
   }
 
-  if ((existingCandidates || []).length > 0) {
+  const existingIds = (existingCandidates || []).map((candidate: any) =>
+    String(candidate.contestant_id)
+  );
+
+  const expectedIds = candidates.map((candidate) => String(candidate.contestantId));
+
+  if (sameSet(existingIds, expectedIds)) {
     return;
+  }
+
+  if (existingIds.length > 0) {
+    const { error: deleteError } = await adminSupabase
+      .from("tie_break_candidates")
+      .delete()
+      .eq("session_id", sessionId);
+
+    if (deleteError) {
+      throw new Error(deleteError.message);
+    }
   }
 
   const candidateRows = buildCandidateRows(sessionId, candidates);
@@ -212,7 +235,7 @@ async function createOpenSession({
   const existingOpenSession = await findOpenSession(adminSupabase, transitionKey);
 
   if (existingOpenSession?.id) {
-    await ensureCandidatesExist({
+    await ensureCandidatesCorrect({
       adminSupabase,
       sessionId: existingOpenSession.id,
       candidates,
@@ -243,7 +266,7 @@ async function createOpenSession({
     throw new Error(sessionError?.message || "Không tạo được phiên vote đồng điểm");
   }
 
-  await ensureCandidatesExist({
+  await ensureCandidatesCorrect({
     adminSupabase,
     sessionId: session.id,
     candidates,
