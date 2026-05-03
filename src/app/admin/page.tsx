@@ -4,22 +4,55 @@ import { DashboardShell } from '@/components/ui/dashboard-shell';
 import { StatCard } from '@/components/ui/stat-card';
 
 const ADMIN_NAV = [
-  { href: '/admin', label: 'Tổng quan', description: 'Theo dõi tiến độ và các bước vận hành.' },
-  { href: '/admin/import', label: 'Import thí sinh', description: 'Đưa danh sách từ Excel vào hệ thống.' },
-  { href: '/admin/assignments', label: 'Phân công vòng 1', description: 'Gán giám khảo chấm thí sinh ở vòng 1.' },
-  { href: '/admin/round2-pairs', label: 'Gán cặp vòng 2', description: 'Ghép 30 thí sinh điểm cao nhất thành từng cặp.' },
-  { href: '/admin/judge-assignments', label: 'Phân công vòng 2-3', description: 'Gán giám khảo chấm vòng 2 và vòng 3.' },
-  { href: '/admin/results', label: 'Kết quả', description: 'Tổng hợp điểm, xếp hạng và xuất phiếu chấm điểm.' },
+  {
+    href: '/admin',
+    label: 'Tổng quan',
+    description: 'Theo dõi tiến độ và các bước vận hành.',
+  },
+  {
+    href: '/admin/import',
+    label: 'Import thí sinh',
+    description: 'Đưa danh sách từ Excel vào hệ thống.',
+  },
+  {
+    href: '/admin/assignments',
+    label: 'Phân công vòng 1',
+    description: 'Gán giám khảo chấm thí sinh ở vòng 1.',
+  },
+  {
+    href: '/admin/round1-score-review',
+    label: 'Xem chấm vòng 1',
+    description: 'Xem video, điểm và nhận xét của từng giám khảo.',
+  },
+  {
+    href: '/admin/round2-pairs',
+    label: 'Gán cặp vòng 2',
+    description: 'Ghép 30 thí sinh điểm cao nhất thành từng cặp.',
+  },
+  {
+    href: '/admin/judge-assignments',
+    label: 'Phân công vòng 2-3',
+    description: 'Gán giám khảo chấm vòng 2 và vòng 3.',
+  },
+  {
+    href: '/admin/results',
+    label: 'Kết quả',
+    description: 'Tổng hợp điểm, xếp hạng và xuất phiếu chấm điểm.',
+  },
 ];
 
 export default async function AdminDashboardPage() {
   const { supabase, profile } = await requireRole('admin');
 
-  const [{ count: contestantCount }, { count: judgeCount }, { count: submittedCount }] = await Promise.all([
-    supabase.from('contestants').select('*', { count: 'exact', head: true }),
-    supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'judge'),
-    supabase.from('score_sheets').select('*', { count: 'exact', head: true }).eq('status', 'submitted'),
-  ]);
+  const [{ count: contestantCount }, { count: judgeCount }, { count: submittedCount }] =
+    await Promise.all([
+      supabase.from('contestants').select('*', { count: 'exact', head: true }),
+      supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'judge'),
+      supabase
+        .from('score_sheets')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'submitted'),
+    ]);
 
   return (
     <DashboardShell
@@ -37,6 +70,10 @@ export default async function AdminDashboardPage() {
 
           <Link href="/admin/assignments" className="btn btn-secondary">
             Phân công vòng 1
+          </Link>
+
+          <Link href="/admin/round1-score-review" className="btn btn-secondary">
+            Xem chấm vòng 1
           </Link>
 
           <Link href="/admin/judge-assignments" className="btn btn-secondary">
