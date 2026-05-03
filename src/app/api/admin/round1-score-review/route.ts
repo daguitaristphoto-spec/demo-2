@@ -6,6 +6,78 @@ type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
 
 const ROUND1_KEYS = ['round1_online', 'round1', 'vong1', 'vòng 1'];
 
+const META_SCORE_KEYS = new Set([
+  'id',
+  'judge_id',
+  'judgeid',
+  'contestant_id',
+  'contestantid',
+  'segment_id',
+  'segmentid',
+  'round_id',
+  'roundid',
+  'round',
+  'status',
+  'total_score',
+  'totalscore',
+  'final_score',
+  'finalscore',
+  'total',
+  'score',
+  'created_at',
+  'createdat',
+  'updated_at',
+  'updatedat',
+  'submitted_at',
+  'submittedat',
+]);
+
+const CRITERION_LABELS: Record<string, string> = {
+  content: 'Nội dung',
+  topic: 'Chủ đề/Nội dung',
+  message: 'Thông điệp',
+  structure: 'Bố cục',
+  language: 'Ngôn ngữ',
+  voice: 'Giọng nói',
+  pronunciation: 'Phát âm',
+  intonation: 'Ngữ điệu',
+  fluency: 'Độ lưu loát',
+  style: 'Phong thái',
+  confidence: 'Sự tự tin',
+  creativity: 'Sáng tạo',
+  interaction: 'Tương tác',
+  body_language: 'Ngôn ngữ cơ thể',
+  stage_presence: 'Làm chủ sân khấu',
+  performance: 'Trình bày/Thể hiện',
+  overall: 'Đánh giá tổng thể',
+};
+
+function normalizeKey(key: string) {
+  return key
+    .toLowerCase()
+    .replace(/[^a-z0-9_]/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_|_$/g, '');
+}
+
+function labelFromKey(key: string) {
+  const normalized = normalizeKey(key)
+    .replace(/^score_/, '')
+    .replace(/_score$/, '')
+    .replace(/^diem_/, '')
+    .replace(/_diem$/, '');
+
+  return (
+    CRITERION_LABELS[normalized] ||
+    normalized
+      .split('_')
+      .filter(Boolean)
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(' ') ||
+    key
+  );
+}
+
 function readText(row: Row | undefined, keys: string[], fallback = '') {
   if (!row) return fallback;
 
@@ -35,124 +107,251 @@ function readNumber(row: Row | undefined, keys: string[]) {
   return null;
 }
 
+function extractFirstUrl(row: Row | undefined) {
+  if (!row) return '';
+
+  const priorityKeys = [
+    'video_url',
+    'videoUrl',
+    'drive_video_url',
+    'driveVideoUrl',
+    'video_drive_url',
+    'videoDriveUrl',
+    'google_drive_url',
+    'googleDriveUrl',
+    'drive_url',
+    'driveUrl',
+    'video_link',
+    'videoLink',
+    'submission_video_url',
+    'submissionVideoUrl',
+    'file_url',
+    'fileUrl',
+    'public_url',
+    'publicUrl',
+    'url',
+    'link',
+  ];
+
+  const directValue = readText(row, priorityKeys);
+
+  if (directValue) return directValue;
+
+  for (const value of Object.values(row)) {
+    if (typeof value !== 'string') continue;
+
+    const match = value.match(/https?:\/\/[^\s"']+/);
+
+    if (match?.[0]) {
+      return match[0];
+    }
+  }
+
+  const fileId = readText(row, [
+    'google_drive_file_id',
+    'googleDriveFileId',
+    'drive_file_id',
+    'driveFileId',
+    'video_file_id',
+    'videoFileId',
+  ]);
+
+  if (fileId) {
+    return `https://drive.google.com/file/d/${fileId}/view`;
+  }
+
+  return '';
+}
+
 function normalizeItems(value: unknown): Row[] {
   if (!value) return [];
 
   if (Array.isArray(value)) {
-    return value.filter((item): item is Row => typeof item === 'object' && item !== null);
+    return value
+      .map((item, index) => {
+        if (typeof item === 'object' && item !== null) {
+          return item as Row;
+        }
+
+        return {
+          key: `item_${index + 1}`,
+          score: item,
+        };
+      })
+      .filter(Boolean);
   }
 
   if (typeof value === 'string') {
     try {
       const parsed = JSON.parse(value);
-
-      if (Array.isArray(parsed)) {
-        return parsed.filter((item): item is Row => typeof item === 'object' && item !== null);
-      }
-
-      if (typeof parsed === 'object' && parsed !== null) {
-        return Object.entries(parsed).map(([key, score]) => ({
-          key,
-          score,
-        }));
-      }
+      return normalizeItems(parsed);
     } catch {
       return [];
     }
   }
 
   if (typeof value === 'object') {
-    return Object.entries(value as Row).map(([key, score]) => ({
-      key,
-      score,
-    }));
+    const objectValue = value as Row;
+
+    return Object.entries(objectValue).map(([key, score]) => {
+      if (typeof score === 'object' && score !== null) {
+        return {
+          key,
+          ...(score as Row),
+        };
+      }
+
+      return {
+        key,
+        score,
+      };
+    });
   }
 
   return [];
 }
 
+function convertRawItemsToScoreItems(items: Row[], sheetId: string) {
+  return items
+    .map((item, index) => {
+      const key = readText(item, [
+        'criterion_key',
+        'criteria_key',
+        'item_key',
+        'key',
+        'criterion_id',
+        'criterionId',
+        'id',
+        'name',
+      ]);
+
+      const label =
+        readText(item, [
+          'criterion_label',
+          'criteria_label',
+          'label',
+          'title',
+          'name',
+        ]) || labelFromKey(key || `Tiêu chí ${index + 1}`);
+
+      const score = readNumber(item, [
+        'score',
+        'point',
+        'points',
+        'value',
+        'diem',
+        'mark',
+        'marks',
+      ]);
+
+      return {
+        id: String(item.id ?? `${sheetId}-${index}`),
+        key,
+        label,
+        score,
+        maxScore: readNumber(item, [
+          'max_score',
+          'max',
+          'maximum_score',
+          'maxScore',
+        ]),
+        note: readText(item, ['note', 'notes', 'comment', 'comments']),
+      };
+    })
+    .filter((item) => item.score !== null);
+}
+
 function extractScoreItems(sheet: Row) {
+  const sheetId = String(sheet.id ?? 'sheet');
+
   const possibleItemFields = [
     'items',
-    'scores',
     'score_items',
+    'scoreItems',
+    'scores',
     'criteria_scores',
     'criteriaScores',
-    'scoreItems',
+    'criterion_scores',
+    'criterionScores',
+    'rubric_scores',
+    'rubricScores',
+    'score_details',
+    'scoreDetails',
+    'details',
+    'payload',
+    'answers',
+    'result',
+    'results',
+    'breakdown',
+    'score_breakdown',
+    'scoreBreakdown',
+    'criteria',
   ];
 
   for (const field of possibleItemFields) {
     const items = normalizeItems(sheet[field]);
+    const converted = convertRawItemsToScoreItems(items, sheetId);
 
-    if (items.length > 0) {
-      return items.map((item, index) => ({
-        id: String(item.id ?? `${sheet.id ?? 'sheet'}-${index}`),
-        key: readText(item, [
-          'criterion_key',
-          'criteria_key',
-          'item_key',
-          'key',
-          'criterion_id',
-          'criterionId',
-          'id',
-        ]),
-        label: readText(item, [
-          'criterion_label',
-          'criteria_label',
-          'label',
-          'name',
-          'title',
-        ]),
-        score: readNumber(item, ['score', 'point', 'points', 'value']),
-        maxScore: readNumber(item, ['max_score', 'max', 'maximum_score', 'maxScore']),
-        note: readText(item, ['note', 'notes', 'comment', 'comments']),
-      }));
+    if (converted.length > 0) {
+      return converted;
     }
   }
 
-  const directCriteria = [
-    {
-      key: 'content',
-      label: 'Nội dung',
-      scoreKeys: ['content_score', 'score_content', 'content'],
-    },
-    {
-      key: 'voice',
-      label: 'Giọng nói',
-      scoreKeys: ['voice_score', 'score_voice', 'voice'],
-    },
-    {
-      key: 'pronunciation',
-      label: 'Phát âm',
-      scoreKeys: ['pronunciation_score', 'score_pronunciation', 'pronunciation'],
-    },
-    {
-      key: 'style',
-      label: 'Phong thái',
-      scoreKeys: ['style_score', 'score_style', 'style'],
-    },
-    {
-      key: 'confidence',
-      label: 'Sự tự tin',
-      scoreKeys: ['confidence_score', 'score_confidence', 'confidence'],
-    },
-    {
-      key: 'creativity',
-      label: 'Sáng tạo',
-      scoreKeys: ['creativity_score', 'score_creativity', 'creativity'],
-    },
-  ];
+  for (const [field, value] of Object.entries(sheet)) {
+    if (
+      value &&
+      (Array.isArray(value) ||
+        typeof value === 'object' ||
+        (typeof value === 'string' &&
+          (value.trim().startsWith('{') || value.trim().startsWith('['))))
+    ) {
+      const items = normalizeItems(value);
+      const converted = convertRawItemsToScoreItems(items, sheetId);
 
-  return directCriteria
-    .map((criterion) => ({
-      id: `${sheet.id ?? 'sheet'}-${criterion.key}`,
-      key: criterion.key,
-      label: criterion.label,
-      score: readNumber(sheet, criterion.scoreKeys),
+      if (converted.length > 1) {
+        return converted;
+      }
+    }
+  }
+
+  const numericCriteria = Object.entries(sheet)
+    .filter(([key, value]) => {
+      const normalizedKey = normalizeKey(key);
+
+      if (META_SCORE_KEYS.has(normalizedKey)) return false;
+      if (normalizedKey.includes('id')) return false;
+      if (normalizedKey.includes('time')) return false;
+      if (normalizedKey.includes('date')) return false;
+      if (normalizedKey.includes('at')) return false;
+
+      const numberValue = Number(value);
+
+      if (Number.isNaN(numberValue)) return false;
+
+      return (
+        normalizedKey.includes('score') ||
+        normalizedKey.includes('diem') ||
+        normalizedKey.includes('point') ||
+        normalizedKey.includes('content') ||
+        normalizedKey.includes('voice') ||
+        normalizedKey.includes('pronunciation') ||
+        normalizedKey.includes('style') ||
+        normalizedKey.includes('confidence') ||
+        normalizedKey.includes('creativity') ||
+        normalizedKey.includes('language') ||
+        normalizedKey.includes('overall')
+      );
+    })
+    .map(([key, value]) => ({
+      id: `${sheetId}-${key}`,
+      key,
+      label: labelFromKey(key),
+      score: Number(value),
       maxScore: null,
       note: '',
-    }))
-    .filter((item) => item.score !== null);
+    }));
+
+  return numericCriteria;
 }
 
 async function loadRound1ScoreSheets(supabase: SupabaseServerClient) {
@@ -304,18 +503,13 @@ export async function GET() {
           'department',
           'organization',
         ]),
-        videoUrl: readText(contestant, [
-          'drive_video_url',
-          'google_drive_url',
-          'video_url',
-          'video_link',
-          'video',
-        ]),
+        videoUrl: extractFirstUrl(contestant),
         sheets: sheets
           .map((sheet) => {
             const judgeId = String(sheet.judge_id ?? sheet.judgeId ?? '');
             const judge = judgesById.get(judgeId);
             const items = extractScoreItems(sheet);
+
             const totalScore =
               readNumber(sheet, [
                 'total_score',
