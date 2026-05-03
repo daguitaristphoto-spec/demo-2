@@ -11,6 +11,7 @@ function readText(row: Row | undefined, keys: string[], fallback = '') {
 
   for (const key of keys) {
     const value = row[key];
+
     if (value !== undefined && value !== null && String(value).trim() !== '') {
       return String(value);
     }
@@ -24,6 +25,7 @@ function readNumber(row: Row | undefined, keys: string[]) {
 
   for (const key of keys) {
     const value = row[key];
+
     if (value !== undefined && value !== null && value !== '') {
       const numberValue = Number(value);
       return Number.isNaN(numberValue) ? null : numberValue;
@@ -31,6 +33,126 @@ function readNumber(row: Row | undefined, keys: string[]) {
   }
 
   return null;
+}
+
+function normalizeItems(value: unknown): Row[] {
+  if (!value) return [];
+
+  if (Array.isArray(value)) {
+    return value.filter((item): item is Row => typeof item === 'object' && item !== null);
+  }
+
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+
+      if (Array.isArray(parsed)) {
+        return parsed.filter((item): item is Row => typeof item === 'object' && item !== null);
+      }
+
+      if (typeof parsed === 'object' && parsed !== null) {
+        return Object.entries(parsed).map(([key, score]) => ({
+          key,
+          score,
+        }));
+      }
+    } catch {
+      return [];
+    }
+  }
+
+  if (typeof value === 'object') {
+    return Object.entries(value as Row).map(([key, score]) => ({
+      key,
+      score,
+    }));
+  }
+
+  return [];
+}
+
+function extractScoreItems(sheet: Row) {
+  const possibleItemFields = [
+    'items',
+    'scores',
+    'score_items',
+    'criteria_scores',
+    'criteriaScores',
+    'scoreItems',
+  ];
+
+  for (const field of possibleItemFields) {
+    const items = normalizeItems(sheet[field]);
+
+    if (items.length > 0) {
+      return items.map((item, index) => ({
+        id: String(item.id ?? `${sheet.id ?? 'sheet'}-${index}`),
+        key: readText(item, [
+          'criterion_key',
+          'criteria_key',
+          'item_key',
+          'key',
+          'criterion_id',
+          'criterionId',
+          'id',
+        ]),
+        label: readText(item, [
+          'criterion_label',
+          'criteria_label',
+          'label',
+          'name',
+          'title',
+        ]),
+        score: readNumber(item, ['score', 'point', 'points', 'value']),
+        maxScore: readNumber(item, ['max_score', 'max', 'maximum_score', 'maxScore']),
+        note: readText(item, ['note', 'notes', 'comment', 'comments']),
+      }));
+    }
+  }
+
+  const directCriteria = [
+    {
+      key: 'content',
+      label: 'Nội dung',
+      scoreKeys: ['content_score', 'score_content', 'content'],
+    },
+    {
+      key: 'voice',
+      label: 'Giọng nói',
+      scoreKeys: ['voice_score', 'score_voice', 'voice'],
+    },
+    {
+      key: 'pronunciation',
+      label: 'Phát âm',
+      scoreKeys: ['pronunciation_score', 'score_pronunciation', 'pronunciation'],
+    },
+    {
+      key: 'style',
+      label: 'Phong thái',
+      scoreKeys: ['style_score', 'score_style', 'style'],
+    },
+    {
+      key: 'confidence',
+      label: 'Sự tự tin',
+      scoreKeys: ['confidence_score', 'score_confidence', 'confidence'],
+    },
+    {
+      key: 'creativity',
+      label: 'Sáng tạo',
+      scoreKeys: ['creativity_score', 'score_creativity', 'creativity'],
+    },
+  ];
+
+  return directCriteria
+    .map((criterion) => ({
+      id: `${sheet.id ?? 'sheet'}-${criterion.key}`,
+      key: criterion.key,
+      label: criterion.label,
+      score: readNumber(sheet, criterion.scoreKeys),
+      maxScore: null,
+      note: '',
+    }))
+    .filter((item) => item.score !== null);
 }
 
 async function loadRound1ScoreSheets(supabase: SupabaseServerClient) {
@@ -112,23 +234,6 @@ export async function GET() {
     );
   }
 
-  const sheetIds = sheetRows.map((sheet) => sheet.id).filter(Boolean);
-
-  let scoreRows: Row[] = [];
-
-  if (sheetIds.length > 0) {
-    const { data, error } = await supabase
-      .from('scores')
-      .select('*')
-      .in('score_sheet_id', sheetIds);
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
-
-    scoreRows = data ?? [];
-  }
-
   const judgeIds = Array.from(
     new Set(
       sheetRows
@@ -153,27 +258,22 @@ export async function GET() {
   }
 
   const judgesById = new Map<string, Row>();
+
   judgeRows.forEach((judge) => {
     judgesById.set(String(judge.id), judge);
-  });
-
-  const scoresBySheetId = new Map<string, Row[]>();
-
-  scoreRows.forEach((score) => {
-    const sheetId = String(score.score_sheet_id ?? '');
-    if (!scoresBySheetId.has(sheetId)) {
-      scoresBySheetId.set(sheetId, []);
-    }
-    scoresBySheetId.get(sheetId)?.push(score);
   });
 
   const sheetsByContestantId = new Map<string, Row[]>();
 
   sheetRows.forEach((sheet) => {
     const contestantId = String(sheet.contestant_id ?? '');
+
+    if (!contestantId) return;
+
     if (!sheetsByContestantId.has(contestantId)) {
       sheetsByContestantId.set(contestantId, []);
     }
+
     sheetsByContestantId.get(contestantId)?.push(sheet);
   });
 
@@ -215,25 +315,29 @@ export async function GET() {
           .map((sheet) => {
             const judgeId = String(sheet.judge_id ?? sheet.judgeId ?? '');
             const judge = judgesById.get(judgeId);
-            const itemRows = scoresBySheetId.get(String(sheet.id)) ?? [];
-
-            return {
-              id: String(sheet.id),
-              judgeId,
-              judgeName: readText(judge, [
-                'full_name',
-                'name',
-                'display_name',
-                'email',
-              ], 'Giám khảo chưa rõ tên'),
-              judgeEmail: readText(judge, ['email']),
-              status: readText(sheet, ['status'], 'not_started'),
-              totalScore: readNumber(sheet, [
+            const items = extractScoreItems(sheet);
+            const totalScore =
+              readNumber(sheet, [
                 'total_score',
                 'final_score',
                 'total',
                 'score',
-              ]),
+              ]) ??
+              (items.length
+                ? items.reduce((sum, item) => sum + (item.score ?? 0), 0)
+                : null);
+
+            return {
+              id: String(sheet.id),
+              judgeId,
+              judgeName: readText(
+                judge,
+                ['full_name', 'name', 'display_name', 'email'],
+                'Giám khảo chưa rõ tên'
+              ),
+              judgeEmail: readText(judge, ['email']),
+              status: readText(sheet, ['status'], 'not_started'),
+              totalScore,
               strengths: readText(sheet, [
                 'strengths',
                 'strength',
@@ -257,40 +361,7 @@ export async function GET() {
                 'updated_at',
                 'created_at',
               ]),
-              items: itemRows.map((item) => ({
-                id: String(item.id),
-                key: readText(item, [
-                  'criterion_key',
-                  'criteria_key',
-                  'item_key',
-                  'key',
-                  'criterion_id',
-                ]),
-                label: readText(item, [
-                  'criterion_label',
-                  'criteria_label',
-                  'label',
-                  'name',
-                  'title',
-                ]),
-                score: readNumber(item, [
-                  'score',
-                  'point',
-                  'points',
-                  'value',
-                ]),
-                maxScore: readNumber(item, [
-                  'max_score',
-                  'max',
-                  'maximum_score',
-                ]),
-                note: readText(item, [
-                  'note',
-                  'notes',
-                  'comment',
-                  'comments',
-                ]),
-              })),
+              items,
             };
           })
           .sort((a, b) => a.judgeName.localeCompare(b.judgeName, 'vi')),
@@ -298,7 +369,9 @@ export async function GET() {
     })
     .sort((a, b) => {
       const byCode = a.code.localeCompare(b.code, 'vi', { numeric: true });
+
       if (byCode !== 0) return byCode;
+
       return a.name.localeCompare(b.name, 'vi');
     });
 
