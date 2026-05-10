@@ -19,6 +19,46 @@ function getGroupMax(group: any) {
   return group.items.reduce((sum: number, item: any) => sum + Number(item.max ?? 0), 0);
 }
 
+async function loadScoreItemsBySheetIds(supabase: any, sheetIds: string[]) {
+  const scoreItems: any[] = [];
+
+  const cleanSheetIds = Array.from(new Set(sheetIds.filter(Boolean)));
+
+  if (cleanSheetIds.length === 0) {
+    return scoreItems;
+  }
+
+  const pageSize = 1000;
+  let from = 0;
+
+  while (true) {
+    const to = from + pageSize - 1;
+
+    const { data, error } = await supabase
+      .from('score_items')
+      .select('score_sheet_id, criterion_key, criterion_group, score')
+      .in('score_sheet_id', cleanSheetIds)
+      .order('score_sheet_id', { ascending: true })
+      .order('criterion_group', { ascending: true })
+      .order('criterion_key', { ascending: true })
+      .range(from, to);
+
+    if (error) {
+      throw error;
+    }
+
+    scoreItems.push(...(data ?? []));
+
+    if (!data || data.length < pageSize) {
+      break;
+    }
+
+    from += pageSize;
+  }
+
+  return scoreItems;
+}
+
 export default async function Round1ScoreSheetsPrintPage() {
   const { supabase } = await requireRole('admin');
 
@@ -50,27 +90,39 @@ export default async function Round1ScoreSheetsPrintPage() {
   }
 
   const sheetRows = sheets ?? [];
-  const sheetIds = sheetRows.map((sheet: any) => sheet.id);
+  const sheetIds = sheetRows.map((sheet: any) => String(sheet.id));
 
   let scoreItems: any[] = [];
 
-  if (sheetIds.length > 0) {
-    const { data } = await supabase
-      .from('score_items')
-      .select('score_sheet_id, criterion_key, criterion_group, score')
-      .in('score_sheet_id', sheetIds);
-
-    scoreItems = data ?? [];
+  try {
+    scoreItems = await loadScoreItemsBySheetIds(supabase, sheetIds);
+  } catch (scoreItemsError) {
+    return (
+      <main style={{ maxWidth: 1000, margin: '0 auto', padding: 24 }}>
+        <h1>Xuất phiếu PDF vòng 1</h1>
+        <p style={{ color: 'red' }}>
+          {scoreItemsError instanceof Error
+            ? scoreItemsError.message
+            : 'Không tải được điểm chi tiết vòng 1'}
+        </p>
+        <Link href="/admin" className="btn btn-secondary">
+          Quay lại admin
+        </Link>
+      </main>
+    );
   }
 
   const itemsBySheet = new Map<string, Map<string, number>>();
 
   for (const item of scoreItems) {
-    if (!itemsBySheet.has(item.score_sheet_id)) {
-      itemsBySheet.set(item.score_sheet_id, new Map());
+    const sheetId = String(item.score_sheet_id);
+    const criterionKey = String(item.criterion_key);
+
+    if (!itemsBySheet.has(sheetId)) {
+      itemsBySheet.set(sheetId, new Map());
     }
 
-    itemsBySheet.get(item.score_sheet_id)?.set(item.criterion_key, Number(item.score));
+    itemsBySheet.get(sheetId)?.set(criterionKey, Number(item.score));
   }
 
   return (
@@ -100,7 +152,7 @@ export default async function Round1ScoreSheetsPrintPage() {
       {sheetRows.map((sheet: any, index: number) => {
         const contestant = pickRelation(sheet.contestant);
         const judge = pickRelation(sheet.judge);
-        const itemMap = itemsBySheet.get(sheet.id) ?? new Map();
+        const itemMap = itemsBySheet.get(String(sheet.id)) ?? new Map();
 
         return (
           <section className="score-sheet-page" key={sheet.id}>
