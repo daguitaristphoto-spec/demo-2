@@ -14,20 +14,23 @@ function formatScore(value: any) {
   return numberValue.toFixed(2);
 }
 
+type CriteriaGroup = {
+  title: string;
+  items: any[];
+};
+
 function groupCriteria(criteria: any[]) {
-  const groups: {
-    title: string;
-    items: any[];
-  }[] = [];
+  const groups: CriteriaGroup[] = [];
 
   for (const criterion of criteria) {
-    const existingGroup = groups.find((group) => group.title === criterion.title);
+    const groupTitle = criterion.description || "Tiêu chí chấm điểm";
+    const existingGroup = groups.find((group) => group.title === groupTitle);
 
     if (existingGroup) {
       existingGroup.items.push(criterion);
     } else {
       groups.push({
-        title: criterion.title,
+        title: groupTitle,
         items: [criterion],
       });
     }
@@ -36,10 +39,91 @@ function groupCriteria(criteria: any[]) {
   return groups;
 }
 
-function getGroupMax(group: any) {
+function getGroupMax(group: CriteriaGroup) {
   return group.items.reduce((sum: number, item: any) => {
     return sum + Number(item.max_score ?? 0);
   }, 0);
+}
+
+async function loadScoreItemsBySheetIds(supabase: any, sheetIds: string[]) {
+  const scoreItems: {
+    scoreSheetId: string;
+    criterionKey: string;
+    score: number;
+  }[] = [];
+
+  const cleanSheetIds = Array.from(new Set(sheetIds.filter(Boolean)));
+
+  if (cleanSheetIds.length === 0) {
+    return scoreItems;
+  }
+
+  const pageSize = 1000;
+  let from = 0;
+  let useLegacyColumns = false;
+
+  while (true) {
+    const to = from + pageSize - 1;
+
+    if (!useLegacyColumns) {
+      const { data, error } = await supabase
+        .from("score_items")
+        .select("score_sheet_id, criterion_key, score")
+        .in("score_sheet_id", cleanSheetIds)
+        .order("score_sheet_id", { ascending: true })
+        .order("criterion_key", { ascending: true })
+        .range(from, to);
+
+      if (!error) {
+        scoreItems.push(
+          ...(data ?? []).map((item: any) => ({
+            scoreSheetId: String(item.score_sheet_id),
+            criterionKey: String(item.criterion_key),
+            score: Number(item.score ?? 0),
+          }))
+        );
+
+        if (!data || data.length < pageSize) {
+          break;
+        }
+
+        from += pageSize;
+        continue;
+      }
+
+      useLegacyColumns = true;
+      from = 0;
+      scoreItems.length = 0;
+    }
+
+    const { data, error } = await supabase
+      .from("score_items")
+      .select("sheet_id, criterion_id, score")
+      .in("sheet_id", cleanSheetIds)
+      .order("sheet_id", { ascending: true })
+      .order("criterion_id", { ascending: true })
+      .range(from, to);
+
+    if (error) {
+      throw error;
+    }
+
+    scoreItems.push(
+      ...(data ?? []).map((item: any) => ({
+        scoreSheetId: String(item.sheet_id),
+        criterionKey: String(item.criterion_id),
+        score: Number(item.score ?? 0),
+      }))
+    );
+
+    if (!data || data.length < pageSize) {
+      break;
+    }
+
+    from += pageSize;
+  }
+
+  return scoreItems;
 }
 
 export default async function Round2ScoreSheetsPrintPage() {
@@ -97,27 +181,40 @@ export default async function Round2ScoreSheetsPrintPage() {
   }
 
   const sheetRows = sheets ?? [];
-  const sheetIds = sheetRows.map((sheet: any) => sheet.id);
+  const sheetIds = sheetRows.map((sheet: any) => String(sheet.id));
 
-  let scoreItems: any[] = [];
+  let scoreItems: {
+    scoreSheetId: string;
+    criterionKey: string;
+    score: number;
+  }[] = [];
 
-  if (sheetIds.length > 0) {
-    const { data } = await supabase
-      .from("score_items")
-      .select("sheet_id, criterion_id, score")
-      .in("sheet_id", sheetIds);
-
-    scoreItems = data ?? [];
+  try {
+    scoreItems = await loadScoreItemsBySheetIds(supabase, sheetIds);
+  } catch (scoreItemsError) {
+    return (
+      <main style={{ maxWidth: 1000, margin: "0 auto", padding: 24 }}>
+        <h1>Xuất phiếu chấm vòng 2</h1>
+        <p style={{ color: "red" }}>
+          {scoreItemsError instanceof Error
+            ? scoreItemsError.message
+            : "Không tải được điểm chi tiết vòng 2"}
+        </p>
+        <Link href="/admin" className="btn btn-secondary">
+          Quay lại admin
+        </Link>
+      </main>
+    );
   }
 
   const itemsBySheet = new Map<string, Map<string, number>>();
 
   for (const item of scoreItems) {
-    if (!itemsBySheet.has(item.sheet_id)) {
-      itemsBySheet.set(item.sheet_id, new Map());
+    if (!itemsBySheet.has(item.scoreSheetId)) {
+      itemsBySheet.set(item.scoreSheetId, new Map());
     }
 
-    itemsBySheet.get(item.sheet_id)?.set(item.criterion_id, Number(item.score));
+    itemsBySheet.get(item.scoreSheetId)?.set(item.criterionKey, item.score);
   }
 
   const criteriaGroups = groupCriteria(criteria ?? []);
@@ -151,7 +248,7 @@ export default async function Round2ScoreSheetsPrintPage() {
         const contestant = pickRelation(sheet.contestant);
         const judge = pickRelation(sheet.judge);
         const pair = pickRelation(sheet.pair);
-        const itemMap = itemsBySheet.get(sheet.id) ?? new Map();
+        const itemMap = itemsBySheet.get(String(sheet.id)) ?? new Map();
 
         return (
           <section className="score-sheet-page" key={sheet.id}>
@@ -250,12 +347,10 @@ export default async function Round2ScoreSheetsPrintPage() {
 
                         {group.items.map((criterion: any) => (
                           <tr key={criterion.id} className="detail-row">
-                            <td className="description-cell">
-                              {criterion.description || criterion.title}
-                            </td>
+                            <td className="description-cell">{criterion.title}</td>
                             <td className="max-score-cell">...../{criterion.max_score}</td>
                             <td className="score-cell">
-                              {formatScore(itemMap.get(criterion.id))}
+                              {formatScore(itemMap.get(String(criterion.id)))}
                             </td>
                           </tr>
                         ))}
