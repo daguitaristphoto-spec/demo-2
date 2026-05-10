@@ -387,6 +387,62 @@ async function loadRound1ScoreSheets(supabase: SupabaseServerClient) {
   });
 }
 
+async function loadScoreItemsBySheetId(
+  supabase: SupabaseServerClient,
+  scoreSheetIds: string[]
+) {
+  const scoreItemsBySheetId = new Map<string, Row[]>();
+
+  if (scoreSheetIds.length === 0) {
+    return scoreItemsBySheetId;
+  }
+
+  const pageSize = 1000;
+  let from = 0;
+
+  while (true) {
+    const to = from + pageSize - 1;
+
+    const { data, error } = await supabase
+      .from('score_items')
+      .select('id, score_sheet_id, criterion_key, criterion_group, score')
+      .in('score_sheet_id', scoreSheetIds)
+      .range(from, to);
+
+    if (error) {
+      throw error;
+    }
+
+    for (const item of data ?? []) {
+      const sheetId = String(item.score_sheet_id);
+      const criterionKey = String(item.criterion_key ?? '');
+
+      if (!scoreItemsBySheetId.has(sheetId)) {
+        scoreItemsBySheetId.set(sheetId, []);
+      }
+
+      scoreItemsBySheetId.get(sheetId)?.push({
+        id: String(item.id),
+        key: criterionKey,
+        label: labelFromKey(criterionKey),
+        score: Number(item.score ?? 0),
+        maxScore: null,
+        note: '',
+        criterionKey,
+        criterionGroup: String(item.criterion_group ?? ''),
+      });
+    }
+
+    if (!data || data.length < pageSize) {
+      break;
+    }
+
+    from += pageSize;
+  }
+
+  return scoreItemsBySheetId;
+}
+
 export async function GET() {
   const supabase = await createClient();
 
@@ -428,6 +484,25 @@ export async function GET() {
           error instanceof Error
             ? error.message
             : 'Không tải được phiếu chấm vòng 1',
+      },
+      { status: 500 }
+    );
+  }
+
+  let scoreItemsBySheetId = new Map<string, Row[]>();
+
+  try {
+    scoreItemsBySheetId = await loadScoreItemsBySheetId(
+      supabase,
+      sheetRows.map((sheet) => String(sheet.id)).filter(Boolean)
+    );
+  } catch (error) {
+    return NextResponse.json(
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : 'Không tải được điểm chi tiết vòng 1',
       },
       { status: 500 }
     );
@@ -506,9 +581,12 @@ export async function GET() {
         videoUrl: extractFirstUrl(contestant),
         sheets: sheets
           .map((sheet) => {
+            const sheetId = String(sheet.id);
             const judgeId = String(sheet.judge_id ?? sheet.judgeId ?? '');
             const judge = judgesById.get(judgeId);
-            const items = extractScoreItems(sheet);
+
+            const items =
+              scoreItemsBySheetId.get(sheetId) ?? extractScoreItems(sheet);
 
             const totalScore =
               readNumber(sheet, [
@@ -522,7 +600,7 @@ export async function GET() {
                 : null);
 
             return {
-              id: String(sheet.id),
+              id: sheetId,
               judgeId,
               judgeName: readText(
                 judge,
