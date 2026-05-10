@@ -244,8 +244,16 @@ function convertRawItemsToScoreItems(items: Row[], sheetId: string) {
         'marks',
       ]);
 
+      const criterionGroup = readText(item, [
+        'criterion_group',
+        'criteria_group',
+        'group',
+        'criterionGroup',
+      ]);
+
       return {
         id: String(item.id ?? `${sheetId}-${index}`),
+
         key,
         label,
         score,
@@ -256,6 +264,18 @@ function convertRawItemsToScoreItems(items: Row[], sheetId: string) {
           'maxScore',
         ]),
         note: readText(item, ['note', 'notes', 'comment', 'comments']),
+
+        criterionKey: key,
+        criterionGroup,
+
+        criterion_key: key,
+        criterion_group: criterionGroup,
+        max_score: readNumber(item, [
+          'max_score',
+          'max',
+          'maximum_score',
+          'maxScore',
+        ]),
       };
     })
     .filter((item) => item.score !== null);
@@ -297,7 +317,7 @@ function extractScoreItems(sheet: Row) {
     }
   }
 
-  for (const [field, value] of Object.entries(sheet)) {
+  for (const [, value] of Object.entries(sheet)) {
     if (
       value &&
       (Array.isArray(value) ||
@@ -344,11 +364,19 @@ function extractScoreItems(sheet: Row) {
     })
     .map(([key, value]) => ({
       id: `${sheetId}-${key}`,
+
       key,
       label: labelFromKey(key),
       score: Number(value),
       maxScore: null,
       note: '',
+
+      criterionKey: key,
+      criterionGroup: '',
+
+      criterion_key: key,
+      criterion_group: '',
+      max_score: null,
     }));
 
   return numericCriteria;
@@ -392,8 +420,9 @@ async function loadScoreItemsBySheetId(
   scoreSheetIds: string[]
 ) {
   const scoreItemsBySheetId = new Map<string, Row[]>();
+  const cleanIds = Array.from(new Set(scoreSheetIds.filter(Boolean)));
 
-  if (scoreSheetIds.length === 0) {
+  if (cleanIds.length === 0) {
     return scoreItemsBySheetId;
   }
 
@@ -406,7 +435,10 @@ async function loadScoreItemsBySheetId(
     const { data, error } = await supabase
       .from('score_items')
       .select('id, score_sheet_id, criterion_key, criterion_group, score')
-      .in('score_sheet_id', scoreSheetIds)
+      .in('score_sheet_id', cleanIds)
+      .order('score_sheet_id', { ascending: true })
+      .order('criterion_group', { ascending: true })
+      .order('criterion_key', { ascending: true })
       .range(from, to);
 
     if (error) {
@@ -416,6 +448,8 @@ async function loadScoreItemsBySheetId(
     for (const item of data ?? []) {
       const sheetId = String(item.score_sheet_id);
       const criterionKey = String(item.criterion_key ?? '');
+      const criterionGroup = String(item.criterion_group ?? '');
+      const score = Number(item.score ?? 0);
 
       if (!scoreItemsBySheetId.has(sheetId)) {
         scoreItemsBySheetId.set(sheetId, []);
@@ -423,13 +457,19 @@ async function loadScoreItemsBySheetId(
 
       scoreItemsBySheetId.get(sheetId)?.push({
         id: String(item.id),
+
         key: criterionKey,
         label: labelFromKey(criterionKey),
-        score: Number(item.score ?? 0),
+        score,
         maxScore: null,
         note: '',
+
         criterionKey,
-        criterionGroup: String(item.criterion_group ?? ''),
+        criterionGroup,
+
+        criterion_key: criterionKey,
+        criterion_group: criterionGroup,
+        max_score: null,
       });
     }
 
@@ -596,7 +636,7 @@ export async function GET() {
                 'score',
               ]) ??
               (items.length
-                ? items.reduce((sum, item) => sum + (item.score ?? 0), 0)
+                ? items.reduce((sum, item) => sum + Number(item.score ?? 0), 0)
                 : null);
 
             return {
