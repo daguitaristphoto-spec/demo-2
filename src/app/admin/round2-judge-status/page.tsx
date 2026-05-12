@@ -3,6 +3,8 @@ import type { CSSProperties } from 'react';
 import { requireRole } from '@/lib/auth-guard';
 import { createClient } from '@/lib/supabase/server';
 
+type AnyRow = Record<string, any>;
+
 type Profile = {
   id: string;
   full_name: string | null;
@@ -14,7 +16,13 @@ type RoundJudge = {
   profiles: Profile | Profile[] | null;
 };
 
-type AnyRow = Record<string, any>;
+type Target = {
+  pairId: string;
+  pairLabel: string;
+  contestantId: string;
+  contestantNumber: string;
+  contestantName: string;
+};
 
 function normalizeProfile(profile: Profile | Profile[] | null): Profile | null {
   if (Array.isArray(profile)) return profile[0] ?? null;
@@ -22,10 +30,90 @@ function normalizeProfile(profile: Profile | Profile[] | null): Profile | null {
 }
 
 function getJudgeId(row: AnyRow): string | null {
-  return row.judge_id ?? row.profile_id ?? row.user_id ?? null;
+  return row.judge_id ?? row.profile_id ?? row.user_id ?? row.judgeId ?? null;
 }
 
-function isRound2(row: AnyRow): boolean {
+function getPairId(row: AnyRow): string | null {
+  return (
+    row.pair_id ??
+    row.round2_pair_id ??
+    row.round_pair_id ??
+    row.pairId ??
+    null
+  );
+}
+
+function getPairMemberId(row: AnyRow): string | null {
+  return (
+    row.pair_member_id ??
+    row.round2_pair_member_id ??
+    row.member_id ??
+    row.round2_member_id ??
+    null
+  );
+}
+
+function getContestantId(row: AnyRow): string | null {
+  return (
+    row.contestant_id ??
+    row.contestantId ??
+    row.candidate_id ??
+    row.target_contestant_id ??
+    row.scored_contestant_id ??
+    row.participant_id ??
+    null
+  );
+}
+
+function getScoreTargetContestantId(
+  row: AnyRow,
+  memberIdToContestantId: Map<string, string>
+): string | null {
+  const directContestantId = getContestantId(row);
+  if (directContestantId) return directContestantId;
+
+  const memberId = getPairMemberId(row);
+  if (memberId) return memberIdToContestantId.get(memberId) ?? null;
+
+  return null;
+}
+
+function getContestantNumber(row: AnyRow | undefined): string {
+  if (!row) return '';
+  return String(row.contestant_number ?? row.sbd ?? row.number ?? '');
+}
+
+function getContestantName(row: AnyRow | undefined): string {
+  if (!row) return 'Không rõ tên';
+  return String(row.full_name ?? row.name ?? row.contestant_name ?? 'Không rõ tên');
+}
+
+function getPairLabel(pair: AnyRow | undefined, fallbackIndex: number): string {
+  if (!pair) return `Cặp ${fallbackIndex + 1}`;
+
+  return String(
+    pair.pair_number ??
+      pair.code ??
+      pair.name ??
+      pair.label ??
+      pair.order_index ??
+      `Cặp ${fallbackIndex + 1}`
+  );
+}
+
+function getMemberOrder(row: AnyRow): number {
+  const value =
+    row.member_order ??
+    row.order_index ??
+    row.position ??
+    row.slot ??
+    row.sort_order ??
+    0;
+
+  return Number(value) || 0;
+}
+
+function isRound2ScoreSheet(row: AnyRow): boolean {
   const value =
     row.round_number ??
     row.round ??
@@ -33,6 +121,7 @@ function isRound2(row: AnyRow): boolean {
     row.segment ??
     row.segment_id ??
     row.stage ??
+    row.type ??
     '';
 
   const text = String(value).toLowerCase();
@@ -49,29 +138,12 @@ function isRound2(row: AnyRow): boolean {
   );
 }
 
-function isSubmitted(row: AnyRow): boolean {
-  return Boolean(
-    row.submitted_at ||
-    row.completed_at ||
-    row.finished_at ||
-    row.locked_at ||
-    row.finalized_at ||
-    row.is_submitted ||
-    row.submitted ||
-    row.is_completed ||
-    row.completed
-  );
-}
+function formatTarget(target: Target): string {
+  const numberText = target.contestantNumber
+    ? `SBD ${target.contestantNumber} — `
+    : '';
 
-function getSubmittedTime(row: AnyRow): string {
-  return (
-    row.submitted_at ||
-    row.completed_at ||
-    row.finished_at ||
-    row.locked_at ||
-    row.finalized_at ||
-    ''
-  );
+  return `${target.pairLabel}: ${numberText}${target.contestantName}`;
 }
 
 export default async function AdminRound2JudgeStatusPage() {
@@ -101,19 +173,32 @@ export default async function AdminRound2JudgeStatusPage() {
     );
   }
 
-  const { data: pairs } = await supabase
-    .from('round2_pairs')
-    .select('id');
-
-  const { data: completions, error: completionsError } = await supabase
-    .from('judge_round_completions')
+  const { data: pairMembers, error: pairMembersError } = await supabase
+    .from('round2_pair_members')
     .select('*');
 
-  if (completionsError) {
+  if (pairMembersError) {
     return (
       <main style={mainStyle}>
-        <h1>Lỗi tải trạng thái nộp điểm vòng 2</h1>
-        <pre>{completionsError.message}</pre>
+        <h1>Lỗi tải danh sách thí sinh vòng 2</h1>
+        <pre>{pairMembersError.message}</pre>
+      </main>
+    );
+  }
+
+  const { data: pairs } = await supabase
+    .from('round2_pairs')
+    .select('*');
+
+  const { data: contestants, error: contestantsError } = await supabase
+    .from('contestants')
+    .select('*');
+
+  if (contestantsError) {
+    return (
+      <main style={mainStyle}>
+        <h1>Lỗi tải danh sách thí sinh</h1>
+        <pre>{contestantsError.message}</pre>
       </main>
     );
   }
@@ -131,49 +216,108 @@ export default async function AdminRound2JudgeStatusPage() {
     );
   }
 
-  const totalPairs = pairs?.length ?? 0;
-
-  const round2CompletionRows = ((completions ?? []) as AnyRow[]).filter(isRound2);
-  const round2ScoreSheetRows = ((scoreSheets ?? []) as AnyRow[]).filter(isRound2);
-
-  const completedJudgeMap = new Map<string, AnyRow>();
-  const submittedSheetCountMap = new Map<string, number>();
-
-  for (const row of round2CompletionRows) {
-    const judgeId = getJudgeId(row);
-    if (!judgeId) continue;
-
-    if (isSubmitted(row)) {
-      completedJudgeMap.set(judgeId, row);
+  const contestantsById = new Map<string, AnyRow>();
+  for (const contestant of (contestants ?? []) as AnyRow[]) {
+    if (contestant.id) {
+      contestantsById.set(contestant.id, contestant);
     }
   }
 
-  for (const row of round2ScoreSheetRows) {
-    const judgeId = getJudgeId(row);
-    if (!judgeId) continue;
-
-    if (isSubmitted(row)) {
-      submittedSheetCountMap.set(
-        judgeId,
-        (submittedSheetCountMap.get(judgeId) ?? 0) + 1
-      );
+  const pairsById = new Map<string, AnyRow>();
+  for (const pair of (pairs ?? []) as AnyRow[]) {
+    if (pair.id) {
+      pairsById.set(pair.id, pair);
     }
   }
 
-  const rows = ((round2Judges ?? []) as RoundJudge[]).map((item) => {
+  const sortedPairMembers = [...((pairMembers ?? []) as AnyRow[])].sort((a, b) => {
+    const pairA = String(getPairId(a) ?? '');
+    const pairB = String(getPairId(b) ?? '');
+
+    if (pairA !== pairB) return pairA.localeCompare(pairB);
+
+    return getMemberOrder(a) - getMemberOrder(b);
+  });
+
+  const memberIdToContestantId = new Map<string, string>();
+
+  for (const member of sortedPairMembers) {
+    const memberId = member.id;
+    const contestantId = getContestantId(member);
+
+    if (memberId && contestantId) {
+      memberIdToContestantId.set(memberId, contestantId);
+    }
+  }
+
+  const targets: Target[] = sortedPairMembers
+    .map((member, index) => {
+      const pairId = getPairId(member);
+      const contestantId = getContestantId(member);
+
+      if (!pairId || !contestantId) return null;
+
+      const contestant = contestantsById.get(contestantId);
+      const pair = pairsById.get(pairId);
+
+      return {
+        pairId,
+        pairLabel: getPairLabel(pair, index),
+        contestantId,
+        contestantNumber: getContestantNumber(contestant),
+        contestantName: getContestantName(contestant),
+      };
+    })
+    .filter((target): target is Target => Boolean(target));
+
+  const targetIds = new Set(targets.map((target) => target.contestantId));
+
+  const submittedByJudge = new Map<string, Set<string>>();
+
+  for (const sheet of (scoreSheets ?? []) as AnyRow[]) {
+    const judgeId = getJudgeId(sheet);
+    if (!judgeId) continue;
+
+    const targetContestantId = getScoreTargetContestantId(
+      sheet,
+      memberIdToContestantId
+    );
+
+    if (!targetContestantId) continue;
+    if (!targetIds.has(targetContestantId)) continue;
+
+    const looksLikeRound2 = isRound2ScoreSheet(sheet) || targetIds.has(targetContestantId);
+    if (!looksLikeRound2) continue;
+
+    if (!submittedByJudge.has(judgeId)) {
+      submittedByJudge.set(judgeId, new Set());
+    }
+
+    submittedByJudge.get(judgeId)?.add(targetContestantId);
+  }
+
+  const rows = ((round2Judges ?? []) as unknown as RoundJudge[]).map((item) => {
     const profile = normalizeProfile(item.profiles);
-    const completedRow = completedJudgeMap.get(item.judge_id);
-    const submittedSheetCount = submittedSheetCountMap.get(item.judge_id) ?? 0;
+    const submittedTargetIds = submittedByJudge.get(item.judge_id) ?? new Set();
 
-    const isCompleted = Boolean(completedRow) || submittedSheetCount > 0;
+    const submittedTargets = targets.filter((target) =>
+      submittedTargetIds.has(target.contestantId)
+    );
+
+    const missingTargets = targets.filter(
+      (target) => !submittedTargetIds.has(target.contestantId)
+    );
+
+    const isCompleted = targets.length > 0 && missingTargets.length === 0;
 
     return {
       judgeId: item.judge_id,
       fullName: profile?.full_name ?? 'Chưa có tên',
       email: profile?.email ?? '',
-      submittedSheetCount,
+      submittedCount: submittedTargets.length,
+      missingCount: missingTargets.length,
+      missingTargets,
       isCompleted,
-      submittedTime: completedRow ? getSubmittedTime(completedRow) : '',
     };
   });
 
@@ -186,7 +330,7 @@ export default async function AdminRound2JudgeStatusPage() {
         <p className="eyebrow">Speak Up DNU 2026</p>
         <h1>Tiến độ chấm vòng 2</h1>
         <p>
-          Theo dõi giám khảo vòng 2 nào đã nộp điểm và giám khảo nào chưa nộp điểm.
+          Theo dõi chi tiết giám khảo nào còn thiếu điểm của thí sinh nào trong vòng 2.
         </p>
 
         <p style={{ marginTop: 12 }}>
@@ -210,18 +354,18 @@ export default async function AdminRound2JudgeStatusPage() {
         </div>
 
         <div>
-          <div className="sidebar-label">Đã nộp điểm</div>
+          <div className="sidebar-label">Đã chấm đủ</div>
           <strong style={{ fontSize: 28 }}>{completedRows.length}</strong>
         </div>
 
         <div>
-          <div className="sidebar-label">Chưa nộp điểm</div>
+          <div className="sidebar-label">Chưa chấm đủ</div>
           <strong style={{ fontSize: 28 }}>{missingRows.length}</strong>
         </div>
 
         <div>
-          <div className="sidebar-label">Số cặp vòng 2</div>
-          <strong style={{ fontSize: 28 }}>{totalPairs}</strong>
+          <div className="sidebar-label">Số thí sinh vòng 2</div>
+          <strong style={{ fontSize: 28 }}>{targets.length}</strong>
         </div>
       </section>
 
@@ -231,8 +375,8 @@ export default async function AdminRound2JudgeStatusPage() {
             <tr>
               <th style={thStyle}>Giám khảo</th>
               <th style={thStyle}>Email</th>
-              <th style={thStyle}>Số phiếu đã nộp</th>
-              <th style={thStyle}>Thời gian nộp</th>
+              <th style={thStyle}>Đã chấm</th>
+              <th style={thStyle}>Còn thiếu</th>
               <th style={thStyle}>Trạng thái</th>
             </tr>
           </thead>
@@ -243,20 +387,16 @@ export default async function AdminRound2JudgeStatusPage() {
                 <td style={tdStyle}>{row.fullName}</td>
                 <td style={tdStyle}>{row.email}</td>
                 <td style={tdStyle}>
-                  {row.submittedSheetCount > 0
-                    ? `${row.submittedSheetCount} phiếu`
-                    : '—'}
+                  {row.submittedCount}/{targets.length} thí sinh
                 </td>
                 <td style={tdStyle}>
-                  {row.submittedTime
-                    ? new Date(row.submittedTime).toLocaleString('vi-VN')
-                    : '—'}
+                  {row.missingCount > 0 ? `${row.missingCount} thí sinh` : '—'}
                 </td>
                 <td style={tdStyle}>
                   {row.isCompleted ? (
-                    <span style={doneBadge}>Đã nộp điểm</span>
+                    <span style={doneBadge}>Đã chấm đủ</span>
                   ) : (
-                    <span style={missingBadge}>Chưa nộp điểm</span>
+                    <span style={missingBadge}>Chưa chấm đủ</span>
                   )}
                 </td>
               </tr>
@@ -273,26 +413,63 @@ export default async function AdminRound2JudgeStatusPage() {
         </table>
       </section>
 
-      {!!missingRows.length && (
-        <section className="card-surface" style={{ padding: 20, marginTop: 20 }}>
-          <h2>Giám khảo chưa nộp điểm vòng 2</h2>
+      <section className="card-surface" style={{ padding: 20, marginTop: 20 }}>
+        <h2>Chi tiết giám khảo còn thiếu điểm</h2>
 
-          <ul>
+        {!targets.length && (
+          <p>
+            Chưa đọc được danh sách thí sinh vòng 2 từ bảng{' '}
+            <code>round2_pair_members</code>. Cần kiểm tra lại bảng ghép cặp vòng 2.
+          </p>
+        )}
+
+        {!!targets.length && !missingRows.length && (
+          <p>Tất cả giám khảo vòng 2 đã chấm đủ.</p>
+        )}
+
+        {!!targets.length && !!missingRows.length && (
+          <div style={{ display: 'grid', gap: 16 }}>
             {missingRows.map((row) => (
-              <li key={row.judgeId}>
-                {row.fullName}
-                {row.email ? ` — ${row.email}` : ''}
-              </li>
+              <div
+                key={row.judgeId}
+                style={{
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  borderRadius: 18,
+                  padding: 16,
+                }}
+              >
+                <h3 style={{ marginTop: 0, marginBottom: 6 }}>
+                  {row.fullName}
+                </h3>
+
+                {row.email && (
+                  <p style={{ marginTop: 0, opacity: 0.8 }}>{row.email}</p>
+                )}
+
+                <p>
+                  Đã chấm <strong>{row.submittedCount}</strong>/
+                  <strong>{targets.length}</strong> thí sinh. Còn thiếu{' '}
+                  <strong>{row.missingCount}</strong> thí sinh:
+                </p>
+
+                <ul style={{ marginBottom: 0 }}>
+                  {row.missingTargets.map((target) => (
+                    <li key={`${row.judgeId}-${target.contestantId}`}>
+                      {formatTarget(target)}
+                    </li>
+                  ))}
+                </ul>
+              </div>
             ))}
-          </ul>
-        </section>
-      )}
+          </div>
+        )}
+      </section>
     </main>
   );
 }
 
 const mainStyle: CSSProperties = {
-  maxWidth: 1100,
+  maxWidth: 1180,
   margin: '0 auto',
   padding: 24,
 };
