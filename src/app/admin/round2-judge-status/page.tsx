@@ -2,30 +2,84 @@ import Link from 'next/link';
 import { requireRole } from '@/lib/auth-guard';
 import { createClient } from '@/lib/supabase/server';
 
-type JudgeProfile = {
+type Profile = {
   id: string;
   full_name: string | null;
   email: string | null;
 };
 
-type RoundJudgeRow = {
+type RoundJudge = {
   judge_id: string;
-  profiles: JudgeProfile | JudgeProfile[] | null;
+  profiles: Profile | Profile[] | null;
 };
 
-type Round2Pair = {
-  id: string;
-};
+type AnyRow = Record<string, any>;
 
-type Round2Score = {
-  judge_id: string;
-  pair_id: string;
-  submitted_at: string | null;
-};
-
-function normalizeProfile(profile: JudgeProfile | JudgeProfile[] | null): JudgeProfile | null {
+function normalizeProfile(profile: Profile | Profile[] | null): Profile | null {
   if (Array.isArray(profile)) return profile[0] ?? null;
   return profile;
+}
+
+function getJudgeId(row: AnyRow): string | null {
+  return (
+    row.judge_id ??
+    row.profile_id ??
+    row.user_id ??
+    row.judgeId ??
+    null
+  );
+}
+
+function isRound2Row(row: AnyRow): boolean {
+  const possibleRoundValue =
+    row.round_number ??
+    row.round ??
+    row.round_id ??
+    row.stage ??
+    row.segment ??
+    row.segment_number ??
+    row.segment_id ??
+    row.round_key ??
+    row.type ??
+    '';
+
+  const text = String(possibleRoundValue).toLowerCase();
+
+  return (
+    possibleRoundValue === 2 ||
+    text === '2' ||
+    text.includes('round2') ||
+    text.includes('round_2') ||
+    text.includes('vong2') ||
+    text.includes('vòng 2') ||
+    text.includes('ban_ket') ||
+    text.includes('bán kết')
+  );
+}
+
+function isSubmittedRow(row: AnyRow): boolean {
+  return Boolean(
+    row.submitted_at ??
+    row.completed_at ??
+    row.finished_at ??
+    row.locked_at ??
+    row.finalized_at ??
+    row.is_submitted ??
+    row.submitted ??
+    row.is_completed ??
+    row.completed
+  );
+}
+
+function getSubmittedTime(row: AnyRow): string {
+  return (
+    row.submitted_at ??
+    row.completed_at ??
+    row.finished_at ??
+    row.locked_at ??
+    row.finalized_at ??
+    ''
+  );
 }
 
 export default async function AdminRound2JudgeStatusPage() {
@@ -44,79 +98,86 @@ export default async function AdminRound2JudgeStatusPage() {
       )
     `)
     .eq('round_number', 2)
-    .eq('is_active', true)
-    .order('judge_id');
+    .eq('is_active', true);
 
   if (judgesError) {
     return (
       <main style={{ maxWidth: 1100, margin: '0 auto', padding: 24 }}>
         <h1>Lỗi tải danh sách giám khảo vòng 2</h1>
         <pre>{judgesError.message}</pre>
-      </main>
-    );
-  }
-
-  const { data: pairs, error: pairsError } = await supabase
-    .from('round2_pairs')
-    .select('id');
-
-  if (pairsError) {
-    return (
-      <main style={{ maxWidth: 1100, margin: '0 auto', padding: 24 }}>
-        <h1>Lỗi tải danh sách cặp thi vòng 2</h1>
-        <pre>{pairsError.message}</pre>
-      </main>
-    );
-  }
-
-  const { data: scores, error: scoresError } = await supabase
-    .from('round2_scores')
-    .select('judge_id, pair_id, submitted_at')
-    .not('submitted_at', 'is', null);
-
-  if (scoresError) {
-    return (
-      <main style={{ maxWidth: 1100, margin: '0 auto', padding: 24 }}>
-        <h1>Lỗi tải điểm vòng 2</h1>
-        <pre>{scoresError.message}</pre>
         <p>
-          Nếu bảng điểm vòng 2 của bạn không tên là <code>round2_scores</code>,
-          cần đổi lại tên bảng trong file này.
+          Kiểm tra lại bảng <code>round_judges</code> đã tồn tại và đã reload schema chưa.
         </p>
       </main>
     );
   }
 
-  const totalPairs = pairs?.length ?? 0;
+  const { data: pairs } = await supabase
+    .from('round2_pairs')
+    .select('id');
 
-  const submittedMap = new Map<string, Set<string>>();
+  const { data: completions, error: completionsError } = await supabase
+    .from('judge_round_completions')
+    .select('*');
 
-  for (const score of (scores ?? []) as Round2Score[]) {
-    if (!score.judge_id || !score.pair_id) continue;
-
-    if (!submittedMap.has(score.judge_id)) {
-      submittedMap.set(score.judge_id, new Set());
-    }
-
-    submittedMap.get(score.judge_id)?.add(score.pair_id);
+  if (completionsError) {
+    return (
+      <main style={{ maxWidth: 1100, margin: '0 auto', padding: 24 }}>
+        <h1>Lỗi tải trạng thái nộp điểm vòng 2</h1>
+        <pre>{completionsError.message}</pre>
+      </main>
+    );
   }
 
-  const rows = ((round2Judges ?? []) as RoundJudgeRow[]).map((item) => {
+  const { data: scoreSheets } = await supabase
+    .from('score_sheets')
+    .select('*');
+
+  const round2CompletionRows = ((completions ?? []) as AnyRow[]).filter(isRound2Row);
+  const round2ScoreSheetRows = ((scoreSheets ?? []) as AnyRow[]).filter(isRound2Row);
+
+  const completionMap = new Map<string, AnyRow>();
+  const scoreSheetCountMap = new Map<string, number>();
+
+  for (const row of round2CompletionRows) {
+    const judgeId = getJudgeId(row);
+    if (!judgeId) continue;
+
+    if (isSubmittedRow(row)) {
+      completionMap.set(judgeId, row);
+    }
+  }
+
+  for (const row of round2ScoreSheetRows) {
+    const judgeId = getJudgeId(row);
+    if (!judgeId) continue;
+
+    if (isSubmittedRow(row)) {
+      scoreSheetCountMap.set(judgeId, (scoreSheetCountMap.get(judgeId) ?? 0) + 1);
+    }
+  }
+
+  const totalPairs = pairs?.length ?? 0;
+
+  const rows = ((round2Judges ?? []) as RoundJudge[]).map((item) => {
     const profile = normalizeProfile(item.profiles);
-    const submittedPairCount = submittedMap.get(item.judge_id)?.size ?? 0;
-    const isCompleted = totalPairs > 0 && submittedPairCount >= totalPairs;
+    const completionRow = completionMap.get(item.judge_id);
+    const submittedSheetCount = scoreSheetCountMap.get(item.judge_id) ?? 0;
+
+    const isCompleted = Boolean(completionRow) || submittedSheetCount > 0;
 
     return {
       judgeId: item.judge_id,
       fullName: profile?.full_name ?? 'Chưa có tên',
       email: profile?.email ?? '',
-      submittedPairCount,
+      submittedSheetCount,
       totalPairs,
       isCompleted,
+      submittedTime: completionRow ? getSubmittedTime(completionRow) : '',
     };
   });
 
-  const completedCount = rows.filter((row) => row.isCompleted).length;
+  const completedRows = rows.filter((row) => row.isCompleted);
   const missingRows = rows.filter((row) => !row.isCompleted);
 
   return (
@@ -125,7 +186,7 @@ export default async function AdminRound2JudgeStatusPage() {
         <p className="eyebrow">Speak Up DNU 2026</p>
         <h1>Tiến độ chấm vòng 2</h1>
         <p>
-          Theo dõi giám khảo nào đã chốt điểm và giám khảo nào chưa chấm đủ các cặp thi vòng 2.
+          Theo dõi 5 giám khảo vòng 2: ai đã nộp điểm và ai chưa nộp điểm.
         </p>
 
         <p style={{ marginTop: 12 }}>
@@ -144,17 +205,17 @@ export default async function AdminRound2JudgeStatusPage() {
         }}
       >
         <div>
-          <div className="sidebar-label">Tổng số giám khảo vòng 2</div>
+          <div className="sidebar-label">Tổng giám khảo vòng 2</div>
           <strong style={{ fontSize: 28 }}>{rows.length}</strong>
         </div>
 
         <div>
-          <div className="sidebar-label">Đã chấm đủ</div>
-          <strong style={{ fontSize: 28 }}>{completedCount}</strong>
+          <div className="sidebar-label">Đã nộp điểm</div>
+          <strong style={{ fontSize: 28 }}>{completedRows.length}</strong>
         </div>
 
         <div>
-          <div className="sidebar-label">Chưa chấm đủ</div>
+          <div className="sidebar-label">Chưa nộp điểm</div>
           <strong style={{ fontSize: 28 }}>{missingRows.length}</strong>
         </div>
 
@@ -170,7 +231,8 @@ export default async function AdminRound2JudgeStatusPage() {
             <tr>
               <th style={thStyle}>Giám khảo</th>
               <th style={thStyle}>Email</th>
-              <th style={thStyle}>Tiến độ</th>
+              <th style={thStyle}>Số phiếu đã nộp</th>
+              <th style={thStyle}>Thời gian nộp</th>
               <th style={thStyle}>Trạng thái</th>
             </tr>
           </thead>
@@ -181,13 +243,20 @@ export default async function AdminRound2JudgeStatusPage() {
                 <td style={tdStyle}>{row.fullName}</td>
                 <td style={tdStyle}>{row.email}</td>
                 <td style={tdStyle}>
-                  {row.submittedPairCount}/{row.totalPairs} cặp
+                  {row.submittedSheetCount > 0
+                    ? `${row.submittedSheetCount} phiếu`
+                    : '—'}
+                </td>
+                <td style={tdStyle}>
+                  {row.submittedTime
+                    ? new Date(row.submittedTime).toLocaleString('vi-VN')
+                    : '—'}
                 </td>
                 <td style={tdStyle}>
                   {row.isCompleted ? (
-                    <span style={doneBadge}>Đã chấm đủ</span>
+                    <span style={doneBadge}>Đã nộp điểm</span>
                   ) : (
-                    <span style={missingBadge}>Chưa chấm đủ</span>
+                    <span style={missingBadge}>Chưa nộp điểm</span>
                   )}
                 </td>
               </tr>
@@ -195,8 +264,8 @@ export default async function AdminRound2JudgeStatusPage() {
 
             {!rows.length && (
               <tr>
-                <td style={tdStyle} colSpan={4}>
-                  Chưa có giám khảo nào được gán cho vòng 2.
+                <td style={tdStyle} colSpan={5}>
+                  Chưa có giám khảo nào được gán cho vòng 2 trong bảng round_judges.
                 </td>
               </tr>
             )}
@@ -206,15 +275,13 @@ export default async function AdminRound2JudgeStatusPage() {
 
       {!!missingRows.length && (
         <section className="card-surface" style={{ padding: 20, marginTop: 20 }}>
-          <h2>Danh sách giám khảo chưa chấm đủ</h2>
+          <h2>Giám khảo chưa nộp điểm vòng 2</h2>
 
           <ul>
             {missingRows.map((row) => (
               <li key={row.judgeId}>
                 {row.fullName}
-                {row.email ? ` — ${row.email}` : ''}:
-                {' '}
-                đã chấm {row.submittedPairCount}/{row.totalPairs} cặp
+                {row.email ? ` — ${row.email}` : ''}
               </li>
             ))}
           </ul>
