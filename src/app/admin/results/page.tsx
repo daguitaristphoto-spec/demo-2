@@ -11,7 +11,7 @@ export default async function AdminResultsPage() {
         <p className="eyebrow">Speak Up DNU 2026</p>
         <h1>Kết quả cuộc thi</h1>
         <p>
-          Quản lý tổng hợp điểm, xếp hạng thí sinh và xuất phiếu chấm điểm trong từng trang tổng hợp.
+          Quản lý tổng hợp điểm, xếp hạng thí sinh và xuất phiếu chấm điểm theo từng vòng.
         </p>
       </div>
 
@@ -22,6 +22,7 @@ export default async function AdminResultsPage() {
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
           gap: 16,
+          marginTop: 24,
         }}
       >
         <Link
@@ -30,15 +31,13 @@ export default async function AdminResultsPage() {
           style={{
             display: 'block',
             textDecoration: 'none',
-            color: 'inherit',
             padding: 20,
           }}
         >
-          <div className="eyebrow">Vòng 1</div>
-          <h3 className="card-title">Tổng hợp điểm vòng 1</h3>
-          <p className="card-subtitle">
-            Xem bảng xếp hạng vòng 1, sắp xếp theo điểm từ cao xuống thấp.
-            Top 30 được đánh dấu màu xanh.
+          <p className="eyebrow">Vòng 1</p>
+          <h2>Kết quả vòng 1</h2>
+          <p>
+            Xem tổng hợp điểm, xếp hạng thí sinh và xuất phiếu điểm vòng 1.
           </p>
         </Link>
 
@@ -48,14 +47,29 @@ export default async function AdminResultsPage() {
           style={{
             display: 'block',
             textDecoration: 'none',
-            color: 'inherit',
             padding: 20,
           }}
         >
-          <div className="eyebrow">Vòng 2</div>
-          <h3 className="card-title">Tổng hợp điểm vòng 2</h3>
-          <p className="card-subtitle">
-            Xem bảng xếp hạng vòng 2 và điểm trung bình của từng thí sinh theo số phiếu giám khảo đã nộp.
+          <p className="eyebrow">Vòng 2</p>
+          <h2>Kết quả vòng 2</h2>
+          <p>
+            Xem tổng hợp điểm, xếp hạng cặp thi và xuất phiếu điểm vòng 2.
+          </p>
+        </Link>
+
+        <Link
+          href="/admin/round2-judge-status"
+          className="card-surface"
+          style={{
+            display: 'block',
+            textDecoration: 'none',
+            padding: 20,
+          }}
+        >
+          <p className="eyebrow">Vòng 2</p>
+          <h2>Tiến độ chấm vòng 2</h2>
+          <p>
+            Xem giám khảo nào đã chấm đủ và giám khảo nào chưa nộp điểm vòng 2.
           </p>
         </Link>
 
@@ -65,41 +79,16 @@ export default async function AdminResultsPage() {
           style={{
             display: 'block',
             textDecoration: 'none',
-            color: 'inherit',
             padding: 20,
           }}
         >
-          <div className="eyebrow">Vòng 3</div>
-          <h3 className="card-title">Tổng hợp điểm vòng 3</h3>
-          <p className="card-subtitle">
-            Xem danh sách thí sinh vào vòng 3, điểm trung bình từng chặng,
-            lấy Top 3 sau chặng 1 + 2 và xếp hạng chung cuộc sau chặng 3.
-          </p>
-        </Link>
-
-        <Link
-          href="/admin/tie-breaks"
-          className="card-surface"
-          style={{
-            display: 'block',
-            textDecoration: 'none',
-            color: 'inherit',
-            padding: 20,
-          }}
-        >
-          <div className="eyebrow">Vote</div>
-          <h3 className="card-title">Quản lý vote đồng điểm</h3>
-          <p className="card-subtitle">
-            Theo dõi và chốt kết quả vote khi có thí sinh đồng điểm ở ngưỡng vào vòng tiếp theo.
+          <p className="eyebrow">Vòng 3</p>
+          <h2>Kết quả vòng 3</h2>
+          <p>
+            Xem tổng hợp điểm, xếp hạng thí sinh và xuất phiếu điểm vòng 3.
           </p>
         </Link>
       </section>
-
-      <div style={{ marginTop: 24 }}>
-        <Link href="/admin" className="btn btn-secondary">
-          Quay lại trang admin
-        </Link>
-      </div>
     </main>
   );
 }
