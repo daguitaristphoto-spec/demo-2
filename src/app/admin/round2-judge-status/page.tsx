@@ -17,6 +17,8 @@ type RoundJudge = {
 };
 
 type Target = {
+  targetId: string;
+  targetType: 'contestant' | 'pair';
   pairId: string;
   pairLabel: string;
   contestantId: string;
@@ -29,63 +31,64 @@ function normalizeProfile(profile: Profile | Profile[] | null): Profile | null {
   return profile;
 }
 
-function getJudgeId(row: AnyRow): string | null {
-  return row.judge_id ?? row.profile_id ?? row.user_id ?? row.judgeId ?? null;
+function valueToString(value: unknown): string {
+  if (value === null || value === undefined) return '';
+  return String(value);
 }
 
-function getPairId(row: AnyRow): string | null {
-  return (
-    row.pair_id ??
-    row.round2_pair_id ??
-    row.round_pair_id ??
-    row.pairId ??
-    null
-  );
+function hasKeyword(key: string, keywords: string[]) {
+  const lowerKey = key.toLowerCase();
+  return keywords.some((keyword) => lowerKey.includes(keyword));
 }
 
-function getPairMemberId(row: AnyRow): string | null {
-  return (
-    row.pair_member_id ??
-    row.round2_pair_member_id ??
-    row.member_id ??
-    row.round2_member_id ??
-    null
-  );
-}
-
-function getContestantId(row: AnyRow): string | null {
-  return (
-    row.contestant_id ??
-    row.contestantId ??
-    row.candidate_id ??
-    row.target_contestant_id ??
-    row.scored_contestant_id ??
-    row.participant_id ??
-    null
-  );
-}
-
-function getScoreTargetContestantId(
+function findMatchingValue(
   row: AnyRow,
-  memberIdToContestantId: Map<string, string>
+  allowedValues: Set<string>,
+  preferredKeywords: string[]
 ): string | null {
-  const directContestantId = getContestantId(row);
-  if (directContestantId) return directContestantId;
+  for (const [key, value] of Object.entries(row)) {
+    const text = valueToString(value);
+    if (!text) continue;
 
-  const memberId = getPairMemberId(row);
-  if (memberId) return memberIdToContestantId.get(memberId) ?? null;
+    if (hasKeyword(key, preferredKeywords) && allowedValues.has(text)) {
+      return text;
+    }
+  }
+
+  for (const [, value] of Object.entries(row)) {
+    const text = valueToString(value);
+    if (!text) continue;
+
+    if (allowedValues.has(text)) {
+      return text;
+    }
+  }
 
   return null;
 }
 
-function getContestantNumber(row: AnyRow | undefined): string {
-  if (!row) return '';
-  return String(row.contestant_number ?? row.sbd ?? row.number ?? '');
+function normalizeName(row: AnyRow | undefined): string {
+  if (!row) return 'Không rõ tên';
+
+  return String(
+    row.full_name ??
+      row.name ??
+      row.contestant_name ??
+      row.display_name ??
+      'Không rõ tên'
+  );
 }
 
-function getContestantName(row: AnyRow | undefined): string {
-  if (!row) return 'Không rõ tên';
-  return String(row.full_name ?? row.name ?? row.contestant_name ?? 'Không rõ tên');
+function normalizeNumber(row: AnyRow | undefined): string {
+  if (!row) return '';
+
+  return String(
+    row.contestant_number ??
+      row.sbd ??
+      row.number ??
+      row.code ??
+      ''
+  );
 }
 
 function getPairLabel(pair: AnyRow | undefined, fallbackIndex: number): string {
@@ -113,32 +116,49 @@ function getMemberOrder(row: AnyRow): number {
   return Number(value) || 0;
 }
 
-function isRound2ScoreSheet(row: AnyRow): boolean {
-  const value =
-    row.round_number ??
-    row.round ??
-    row.round_id ??
-    row.segment ??
-    row.segment_id ??
-    row.stage ??
-    row.type ??
-    '';
+function rowHasRoundInfo(row: AnyRow): boolean {
+  return Object.keys(row).some((key) => {
+    const lowerKey = key.toLowerCase();
 
-  const text = String(value).toLowerCase();
+    return (
+      lowerKey.includes('round') ||
+      lowerKey.includes('segment') ||
+      lowerKey.includes('stage')
+    );
+  });
+}
 
-  return (
-    value === 2 ||
-    text === '2' ||
-    text.includes('round2') ||
-    text.includes('round_2') ||
-    text.includes('vong2') ||
-    text.includes('vòng 2') ||
-    text.includes('ban_ket') ||
-    text.includes('bán kết')
-  );
+function isRound2Row(row: AnyRow): boolean {
+  const values = Object.entries(row)
+    .filter(([key]) => {
+      const lowerKey = key.toLowerCase();
+
+      return (
+        lowerKey.includes('round') ||
+        lowerKey.includes('segment') ||
+        lowerKey.includes('stage')
+      );
+    })
+    .map(([, value]) => String(value).toLowerCase());
+
+  return values.some((text) => {
+    return (
+      text === '2' ||
+      text.includes('round2') ||
+      text.includes('round_2') ||
+      text.includes('vong2') ||
+      text.includes('vòng 2') ||
+      text.includes('ban_ket') ||
+      text.includes('bán kết')
+    );
+  });
 }
 
 function formatTarget(target: Target): string {
+  if (target.targetType === 'pair') {
+    return target.pairLabel;
+  }
+
   const numberText = target.contestantNumber
     ? `SBD ${target.contestantNumber} — `
     : '';
@@ -180,7 +200,7 @@ export default async function AdminRound2JudgeStatusPage() {
   if (pairMembersError) {
     return (
       <main style={mainStyle}>
-        <h1>Lỗi tải danh sách thí sinh vòng 2</h1>
+        <h1>Lỗi tải round2_pair_members</h1>
         <pre>{pairMembersError.message}</pre>
       </main>
     );
@@ -190,18 +210,9 @@ export default async function AdminRound2JudgeStatusPage() {
     .from('round2_pairs')
     .select('*');
 
-  const { data: contestants, error: contestantsError } = await supabase
+  const { data: contestants } = await supabase
     .from('contestants')
     .select('*');
-
-  if (contestantsError) {
-    return (
-      <main style={mainStyle}>
-        <h1>Lỗi tải danh sách thí sinh</h1>
-        <pre>{contestantsError.message}</pre>
-      </main>
-    );
-  }
 
   const { data: scoreSheets, error: scoreSheetsError } = await supabase
     .from('score_sheets')
@@ -210,102 +221,247 @@ export default async function AdminRound2JudgeStatusPage() {
   if (scoreSheetsError) {
     return (
       <main style={mainStyle}>
-        <h1>Lỗi tải phiếu điểm</h1>
+        <h1>Lỗi tải score_sheets</h1>
         <pre>{scoreSheetsError.message}</pre>
       </main>
     );
   }
 
+  const judgeIds = new Set(
+    ((round2Judges ?? []) as RoundJudge[]).map((item) => item.judge_id)
+  );
+
+  const contestantRows = (contestants ?? []) as AnyRow[];
+  const pairRows = (pairs ?? []) as AnyRow[];
+  const pairMemberRows = (pairMembers ?? []) as AnyRow[];
+  const sheetRows = (scoreSheets ?? []) as AnyRow[];
+
+  const contestantIds = new Set(
+    contestantRows
+      .map((row) => valueToString(row.id))
+      .filter(Boolean)
+  );
+
+  const pairIds = new Set(
+    pairRows
+      .map((row) => valueToString(row.id))
+      .filter(Boolean)
+  );
+
+  const pairMemberIds = new Set(
+    pairMemberRows
+      .map((row) => valueToString(row.id))
+      .filter(Boolean)
+  );
+
   const contestantsById = new Map<string, AnyRow>();
-  for (const contestant of (contestants ?? []) as AnyRow[]) {
-    if (contestant.id) {
-      contestantsById.set(contestant.id, contestant);
-    }
+  for (const contestant of contestantRows) {
+    const id = valueToString(contestant.id);
+    if (id) contestantsById.set(id, contestant);
   }
 
   const pairsById = new Map<string, AnyRow>();
-  for (const pair of (pairs ?? []) as AnyRow[]) {
-    if (pair.id) {
-      pairsById.set(pair.id, pair);
-    }
+  for (const pair of pairRows) {
+    const id = valueToString(pair.id);
+    if (id) pairsById.set(id, pair);
   }
-
-  const sortedPairMembers = [...((pairMembers ?? []) as AnyRow[])].sort((a, b) => {
-    const pairA = String(getPairId(a) ?? '');
-    const pairB = String(getPairId(b) ?? '');
-
-    if (pairA !== pairB) return pairA.localeCompare(pairB);
-
-    return getMemberOrder(a) - getMemberOrder(b);
-  });
 
   const memberIdToContestantId = new Map<string, string>();
 
-  for (const member of sortedPairMembers) {
-    const memberId = member.id;
-    const contestantId = getContestantId(member);
+  for (const member of pairMemberRows) {
+    const memberId = valueToString(member.id);
+
+    const contestantId = findMatchingValue(member, contestantIds, [
+      'contestant',
+      'candidate',
+      'participant',
+      'student',
+      'player',
+    ]);
 
     if (memberId && contestantId) {
       memberIdToContestantId.set(memberId, contestantId);
     }
   }
 
-  const targets: Target[] = sortedPairMembers
-    .map((member, index) => {
-      const pairId = getPairId(member);
-      const contestantId = getContestantId(member);
+  const sortedPairMembers = [...pairMemberRows].sort((a, b) => {
+    const pairA =
+      findMatchingValue(a, pairIds, ['pair', 'round2']) ??
+      '';
 
-      if (!pairId || !contestantId) return null;
+    const pairB =
+      findMatchingValue(b, pairIds, ['pair', 'round2']) ??
+      '';
+
+    if (pairA !== pairB) return pairA.localeCompare(pairB);
+
+    return getMemberOrder(a) - getMemberOrder(b);
+  });
+
+  const targetsFromPairMembers: Target[] = sortedPairMembers
+    .map((member, index) => {
+      const pairId =
+        findMatchingValue(member, pairIds, ['pair', 'round2']) ??
+        '';
+
+      const contestantId = findMatchingValue(member, contestantIds, [
+        'contestant',
+        'candidate',
+        'participant',
+        'student',
+        'player',
+      ]);
+
+      if (!contestantId) return null;
 
       const contestant = contestantsById.get(contestantId);
-      const pair = pairsById.get(pairId);
+      const pair = pairId ? pairsById.get(pairId) : undefined;
 
       return {
+        targetId: contestantId,
+        targetType: 'contestant' as const,
         pairId,
         pairLabel: getPairLabel(pair, index),
         contestantId,
-        contestantNumber: getContestantNumber(contestant),
-        contestantName: getContestantName(contestant),
+        contestantNumber: normalizeNumber(contestant),
+        contestantName: normalizeName(contestant),
       };
     })
     .filter((target): target is Target => Boolean(target));
 
-  const targetIds = new Set(targets.map((target) => target.contestantId));
+  function getJudgeIdFromSheet(sheet: AnyRow): string | null {
+    return findMatchingValue(sheet, judgeIds, [
+      'judge',
+      'profile',
+      'user',
+      'owner',
+    ]);
+  }
+
+  function getTargetFromSheet(sheet: AnyRow): Target | null {
+    const memberId = findMatchingValue(sheet, pairMemberIds, [
+      'pair_member',
+      'round2_pair_member',
+      'member',
+    ]);
+
+    if (memberId) {
+      const contestantId = memberIdToContestantId.get(memberId);
+
+      if (contestantId) {
+        const contestant = contestantsById.get(contestantId);
+
+        return {
+          targetId: contestantId,
+          targetType: 'contestant',
+          pairId: '',
+          pairLabel: 'Vòng 2',
+          contestantId,
+          contestantNumber: normalizeNumber(contestant),
+          contestantName: normalizeName(contestant),
+        };
+      }
+    }
+
+    const contestantId = findMatchingValue(sheet, contestantIds, [
+      'contestant',
+      'candidate',
+      'participant',
+      'student',
+      'player',
+      'target',
+    ]);
+
+    if (contestantId) {
+      const contestant = contestantsById.get(contestantId);
+
+      return {
+        targetId: contestantId,
+        targetType: 'contestant',
+        pairId: '',
+        pairLabel: 'Vòng 2',
+        contestantId,
+        contestantNumber: normalizeNumber(contestant),
+        contestantName: normalizeName(contestant),
+      };
+    }
+
+    const pairId = findMatchingValue(sheet, pairIds, [
+      'pair',
+      'round2',
+      'target',
+    ]);
+
+    if (pairId) {
+      const pair = pairsById.get(pairId);
+
+      return {
+        targetId: pairId,
+        targetType: 'pair',
+        pairId,
+        pairLabel: getPairLabel(pair, 0),
+        contestantId: '',
+        contestantNumber: '',
+        contestantName: '',
+      };
+    }
+
+    return null;
+  }
+
+  const round2Sheets = sheetRows.filter((sheet) => {
+    if (rowHasRoundInfo(sheet)) {
+      return isRound2Row(sheet);
+    }
+
+    return Boolean(getJudgeIdFromSheet(sheet) && getTargetFromSheet(sheet));
+  });
+
+  const targetsFromSheetsMap = new Map<string, Target>();
+
+  for (const sheet of round2Sheets) {
+    const target = getTargetFromSheet(sheet);
+    if (!target) continue;
+
+    if (!targetsFromSheetsMap.has(target.targetId)) {
+      targetsFromSheetsMap.set(target.targetId, target);
+    }
+  }
+
+  const targets =
+    targetsFromPairMembers.length > 0
+      ? targetsFromPairMembers
+      : Array.from(targetsFromSheetsMap.values());
+
+  const targetIdSet = new Set(targets.map((target) => target.targetId));
 
   const submittedByJudge = new Map<string, Set<string>>();
 
-  for (const sheet of (scoreSheets ?? []) as AnyRow[]) {
-    const judgeId = getJudgeId(sheet);
-    if (!judgeId) continue;
+  for (const sheet of round2Sheets) {
+    const judgeId = getJudgeIdFromSheet(sheet);
+    const target = getTargetFromSheet(sheet);
 
-    const targetContestantId = getScoreTargetContestantId(
-      sheet,
-      memberIdToContestantId
-    );
-
-    if (!targetContestantId) continue;
-    if (!targetIds.has(targetContestantId)) continue;
-
-    const looksLikeRound2 = isRound2ScoreSheet(sheet) || targetIds.has(targetContestantId);
-    if (!looksLikeRound2) continue;
+    if (!judgeId || !target) continue;
+    if (!judgeIds.has(judgeId)) continue;
+    if (targetIdSet.size > 0 && !targetIdSet.has(target.targetId)) continue;
 
     if (!submittedByJudge.has(judgeId)) {
       submittedByJudge.set(judgeId, new Set());
     }
 
-    submittedByJudge.get(judgeId)?.add(targetContestantId);
+    submittedByJudge.get(judgeId)?.add(target.targetId);
   }
 
-  const rows = ((round2Judges ?? []) as unknown as RoundJudge[]).map((item) => {
+  const rows = ((round2Judges ?? []) as RoundJudge[]).map((item) => {
     const profile = normalizeProfile(item.profiles);
     const submittedTargetIds = submittedByJudge.get(item.judge_id) ?? new Set();
 
     const submittedTargets = targets.filter((target) =>
-      submittedTargetIds.has(target.contestantId)
+      submittedTargetIds.has(target.targetId)
     );
 
     const missingTargets = targets.filter(
-      (target) => !submittedTargetIds.has(target.contestantId)
+      (target) => !submittedTargetIds.has(target.targetId)
     );
 
     const isCompleted = targets.length > 0 && missingTargets.length === 0;
@@ -324,13 +480,21 @@ export default async function AdminRound2JudgeStatusPage() {
   const completedRows = rows.filter((row) => row.isCompleted);
   const missingRows = rows.filter((row) => !row.isCompleted);
 
+  const pairMemberColumns = pairMemberRows[0]
+    ? Object.keys(pairMemberRows[0]).join(', ')
+    : 'Không có dữ liệu';
+
+  const scoreSheetColumns = sheetRows[0]
+    ? Object.keys(sheetRows[0]).join(', ')
+    : 'Không có dữ liệu';
+
   return (
     <main style={mainStyle}>
       <div style={{ marginBottom: 24 }}>
         <p className="eyebrow">Speak Up DNU 2026</p>
         <h1>Tiến độ chấm vòng 2</h1>
         <p>
-          Theo dõi chi tiết giám khảo nào còn thiếu điểm của thí sinh nào trong vòng 2.
+          Theo dõi chi tiết giám khảo nào còn thiếu điểm của thí sinh/cặp nào trong vòng 2.
         </p>
 
         <p style={{ marginTop: 12 }}>
@@ -364,7 +528,7 @@ export default async function AdminRound2JudgeStatusPage() {
         </div>
 
         <div>
-          <div className="sidebar-label">Số thí sinh vòng 2</div>
+          <div className="sidebar-label">Số mục cần chấm</div>
           <strong style={{ fontSize: 28 }}>{targets.length}</strong>
         </div>
       </section>
@@ -387,10 +551,10 @@ export default async function AdminRound2JudgeStatusPage() {
                 <td style={tdStyle}>{row.fullName}</td>
                 <td style={tdStyle}>{row.email}</td>
                 <td style={tdStyle}>
-                  {row.submittedCount}/{targets.length} thí sinh
+                  {row.submittedCount}/{targets.length} mục
                 </td>
                 <td style={tdStyle}>
-                  {row.missingCount > 0 ? `${row.missingCount} thí sinh` : '—'}
+                  {row.missingCount > 0 ? `${row.missingCount} mục` : '—'}
                 </td>
                 <td style={tdStyle}>
                   {row.isCompleted ? (
@@ -417,10 +581,34 @@ export default async function AdminRound2JudgeStatusPage() {
         <h2>Chi tiết giám khảo còn thiếu điểm</h2>
 
         {!targets.length && (
-          <p>
-            Chưa đọc được danh sách thí sinh vòng 2 từ bảng{' '}
-            <code>round2_pair_members</code>. Cần kiểm tra lại bảng ghép cặp vòng 2.
-          </p>
+          <div>
+            <p>
+              Chưa xác định được danh sách mục cần chấm vòng 2. Hệ thống đã đọc được:
+            </p>
+
+            <ul>
+              <li>
+                <strong>round2_pair_members:</strong> {pairMemberRows.length} dòng
+              </li>
+              <li>
+                <strong>round2_pairs:</strong> {pairRows.length} dòng
+              </li>
+              <li>
+                <strong>contestants:</strong> {contestantRows.length} dòng
+              </li>
+              <li>
+                <strong>score_sheets:</strong> {sheetRows.length} dòng
+              </li>
+            </ul>
+
+            <p>
+              Cột trong <code>round2_pair_members</code>: {pairMemberColumns}
+            </p>
+
+            <p>
+              Cột trong <code>score_sheets</code>: {scoreSheetColumns}
+            </p>
+          </div>
         )}
 
         {!!targets.length && !missingRows.length && (
@@ -448,13 +636,13 @@ export default async function AdminRound2JudgeStatusPage() {
 
                 <p>
                   Đã chấm <strong>{row.submittedCount}</strong>/
-                  <strong>{targets.length}</strong> thí sinh. Còn thiếu{' '}
-                  <strong>{row.missingCount}</strong> thí sinh:
+                  <strong>{targets.length}</strong> mục. Còn thiếu{' '}
+                  <strong>{row.missingCount}</strong> mục:
                 </p>
 
                 <ul style={{ marginBottom: 0 }}>
                   {row.missingTargets.map((target) => (
-                    <li key={`${row.judgeId}-${target.contestantId}`}>
+                    <li key={`${row.judgeId}-${target.targetId}`}>
                       {formatTarget(target)}
                     </li>
                   ))}
